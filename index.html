@@ -6,12 +6,18 @@
     <title>文法並べ替えマスター</title>
     <!-- Tailwind CSS (デザイン用) -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <!-- React & ReactDOM (アプリのエンジン) -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <!-- Babel (ブラウザでReactを動かす変換機) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
+
+    <!-- ★Mobile Drag & Drop Polyfill (iPad/スマホのタッチ操作をドラッグに変換) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0-rc.2/default.css">
+    <script src="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0-rc.2/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0-rc.2/scroll-behaviour.min.js"></script>
+
     <style>
         @keyframes bounce-slight {
             0%, 100% { transform: translateY(0) scale(0.9); }
@@ -32,10 +38,36 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* ★ドラッグ中のカードのスタイル調整（指についてくる要素） */
+        .dnd-drag-image-override {
+            transform: scale(1.1) !important; /* 少し大きく */
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3) !important; /* 影を濃く */
+            opacity: 0.9 !important;
+            z-index: 9999 !important;
+            border: 2px solid #3B82F6 !important; /* 青い枠線 */
+            background-color: white !important;
+            border-radius: 0.5rem !important;
+            pointer-events: none !important;
+        }
     </style>
 </head>
 <body class="bg-slate-100 text-gray-800 font-sans">
     <div id="root"></div>
+
+    <!-- ★Polyfillの初期化スクリプト -->
+    <script>
+        // オプション設定
+        var options = {
+            // ドラッグ中の画像のY軸オフセット調整（指で隠れないように少し上にずらすなど）
+            dragImageTranslateOverride: MobileDragDrop.scrollBehaviour.dragImageTranslateOverride
+        };
+        // ポリフィルの適用
+        MobileDragDrop.polyfill(options);
+
+        // タッチ操作でのスクロール干渉を防ぐ（必要な場合）
+        window.addEventListener('touchmove', function() {}, {passive: false});
+    </script>
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
@@ -447,11 +479,19 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                 }
             };
 
-            // --- Drag & Drop Updates ---
+            // --- Drag & Drop Updates (for Polyfill & improved visuals) ---
             const handleDragStart = (e, word, fromBank) => {
                 if (feedback === 'correct' || feedback === 'giveup') return;
                 setDraggedItem({ word, fromBank });
                 e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", JSON.stringify({word, fromBank}));
+                
+                // ドラッグ中の見た目を薄くする（Polyfillが複製を作るため、元の要素は薄くしてOK）
+                e.target.style.opacity = '0.4';
+            };
+            
+            const handleDragEnd = (e) => {
+                e.target.style.opacity = '1'; // 元に戻す
             };
 
             const handleDragOver = (e) => {
@@ -782,7 +822,8 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                                     <div 
                                         key={word.id} 
                                         draggable={!feedback} 
-                                        onDragStart={(e) => handleDragStart(e, word, false)} 
+                                        onDragStart={(e) => handleDragStart(e, word, false)}
+                                        onDragEnd={handleDragEnd} 
                                         onDrop={(e) => handleCardDrop(e, word)}
                                         onClick={() => handleWordClick(word, false)} 
                                         className={getCardStyle(word, true)}
@@ -794,7 +835,7 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                             </div>
                             <div className="flex flex-wrap justify-center gap-2 min-h-[60px]" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'bank')}>
                                 {shuffledWords.map((word) => (
-                                    <div key={word.id} draggable={!feedback} onDragStart={(e) => handleDragStart(e, word, true)} onClick={() => handleWordClick(word, true)} className={getCardStyle(word, false)}>{word.text}</div>
+                                    <div key={word.id} draggable={!feedback} onDragStart={(e) => handleDragStart(e, word, true)} onDragEnd={handleDragEnd} onClick={() => handleWordClick(word, true)} className={getCardStyle(word, false)}>{word.text}</div>
                                 ))}
                             </div>
                         </div>
