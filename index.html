@@ -39,16 +39,34 @@
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-        /* ★ドラッグ中のカードのスタイル調整（指についてくる要素） */
+        /* ★ドラッグ中のカードのスタイル調整 */
         .dnd-drag-image-override {
-            transform: scale(1.1) !important; /* 少し大きく */
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3) !important; /* 影を濃く */
+            transform: scale(1.1) !important;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3) !important;
             opacity: 0.9 !important;
             z-index: 9999 !important;
-            border: 2px solid #3B82F6 !important; /* 青い枠線 */
+            border: 2px solid #3B82F6 !important;
             background-color: white !important;
             border-radius: 0.5rem !important;
             pointer-events: none !important;
+        }
+        
+        /* 選択中のカードスタイル */
+        .card-selected {
+            background-color: #FFF7ED !important; /* orange-50 */
+            border-color: #F97316 !important; /* orange-500 */
+            color: #C2410C !important; /* orange-700 */
+            transform: scale(1.05);
+            box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.3) !important;
+        }
+
+        /* 使用済みカードのスタイル */
+        .card-used {
+            opacity: 0.3 !important;
+            background-color: #F1F5F9 !important; /* slate-100 */
+            color: #94A3B8 !important; /* slate-400 */
+            border-color: #E2E8F0 !important; /* slate-200 */
+            box-shadow: none !important;
         }
     </style>
 </head>
@@ -57,27 +75,20 @@
 
     <!-- ★Polyfillの初期化スクリプト -->
     <script>
-        // オプション設定
         var options = {};
-        
-        // エラー回避: ライブラリが正しく読み込まれているか確認してから設定
         if (window.MobileDragDrop && MobileDragDrop.scrollBehaviour) {
             options.dragImageTranslateOverride = MobileDragDrop.scrollBehaviour.dragImageTranslateOverride;
         }
-
-        // ポリフィルの適用
         if (window.MobileDragDrop) {
             MobileDragDrop.polyfill(options);
         }
-
-        // タッチ操作でのスクロール干渉を防ぐ（必要な場合）
         window.addEventListener('touchmove', function() {}, {passive: false});
     </script>
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- アイコンコンポーネント (Lucide互換SVG) ---
+        // --- アイコンコンポーネント ---
         const IconBase = ({ children, size = 24, className = "" }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                 {children}
@@ -103,6 +114,9 @@
         const Calendar = (props) => <IconBase {...props}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></IconBase>;
         const Save = (props) => <IconBase {...props}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></IconBase>;
         const Zap = (props) => <IconBase {...props}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></IconBase>;
+        const Trash2 = (props) => <IconBase {...props}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></IconBase>;
+        const CheckSquare = (props) => <IconBase {...props}><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></IconBase>;
+        const Square = (props) => <IconBase {...props}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></IconBase>;
 
         // --- 効果音 ---
         const playSound = (type) => {
@@ -140,26 +154,26 @@
 
         // --- デフォルトデータ ---
         const DEFAULT_DATA_CSV = `
-I heard my parents talk about my grades.	両親が私の成績について話しているのを聞いた。	知覚動詞	grades: 成績
-We saw a police officer chasing a man.	私たちは警官が男の人を追いかけているのを見た。	知覚動詞	chase: 追いかける
+[I heard my parents talk about] my grades.	両親が私の成績について話しているのを聞いた。	知覚動詞	grades: 成績
+[We saw a police officer chasing] a man.	私たちは警官が男の人を追いかけているのを見た。	知覚動詞	chase: 追いかける
 I saw a boy scolded by his father.	私は少年が父親に叱られているのを見た。	知覚動詞	scold: 叱る (受動態に注意)
 Didn’t you hear the phone ring?	電話が鳴るのが聞こえませんでしたか？	知覚動詞	ring: 鳴る
-I watched my favorite baseball player talk about his team on YouTube.	私は好きな野球選手がYouTubeで自分のチームについて話しているのを見た。	知覚動詞
-I saw a deer surrounded by lions on TV.	私はテレビで、シカがライオンに囲まれているのを見た。	知覚動詞	surround: 囲む / deer: シカ(単複同形)
+[I watched my favorite baseball player talk] about his team on YouTube.	私は好きな野球選手がYouTubeで自分のチームについて話しているのを見た。	知覚動詞	
+Last Sunday, [I saw a deer surrounded by lions] on TV.	この前の日曜日、私はテレビでシカがライオンに囲まれているのを見た。	知覚動詞	[ ]内が並べ替え対象。surround: 囲む
 My mother made me clean the bathroom.	母は私に（言いつけて）浴室の掃除をさせた。	使役動詞	make O do: Oに(無理やり)～させる
-My mother let me play video games last night.	母は昨夜、私にテレビゲームをさせてくれた。	使役動詞	let O do: Oに～させてあげる(許可)
+[My mother let me play video games] last night.	母は昨夜、私にテレビゲームをさせてくれた。	使役動詞	let O do: Oに～させてあげる(許可)
 My mother had the doctor look at her leg.	母は医者に足を診てもらった。	使役動詞	have O do: Oに～してもらう(依頼)
-My coach let me go home early because I felt sick.	気分が悪かったので、コーチは私を早退させてくれた。	使役動詞	go home early: 早退する
+[My coach let me go home early] because I felt sick.	気分が悪かったので、コーチは私を早退させてくれた。	使役動詞	go home early: 早退する
 The teacher made me clean the classroom by myself.	先生は私にひとりで教室の掃除をさせた。	使役動詞	by myself: ひとりで
-At the hotel, I had the staff carry my bag to the room.	ホテルで、私はスタッフに部屋までカバンを運んでもらった。	使役動詞
-My parents let me go to USJ with my friends.	両親は私を友だちとUSJに行かせてくれた。	使役動詞
-The comedian was made to drink Aojiru as a penalty for the game.	その芸人はゲームの罰として青汁を飲まされた。	使役動詞	penalty: 罰 / makeの受動態はtoが必要
+At the hotel, [I had the staff carry my bag] to the room.	ホテルで、私はスタッフに部屋までカバンを運んでもらった。	使役動詞	[ ]内が並べ替え対象
+[My parents let me go to USJ] with my friends.	両親は私を友だちとUSJに行かせてくれた。	使役動詞	
+[The comedian was made to drink Aojiru] as a penalty for the game.	その芸人はゲームの罰として青汁を飲まされた。	使役動詞	penalty: 罰 / makeの受動態はtoが必要
 He asked me if I had seen the movie.	彼は私に、その映画を見たかどうか尋ねた。	接続詞	ask + O + if...: Oに～かどうか尋ねる
-My mother asked me when I would come home.	母は私に、いつ帰ってくるのか尋ねた。	接続詞
-My friends asked me if I wanted to play e-sports.	友達は私にeスポーツをやりたいかどうか尋ねた。	接続詞
-Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた。	接続詞
-Some parents ask me if e-sports is a real sport.	何人かの両親は私にeスポーツは本当のスポーツなのかどうか尋ねた。	接続詞
-The e-sports player told us why he needed mental skills.	eスポーツプレーヤ―たちは私たちになぜ精神的スキルが必要なのか伝えた。	接続詞	mental skills: 精神的な技術
+[My mother asked me when I would] come home.	母は私に、いつ帰ってくるのか尋ねた。	接続詞	
+My friends [asked me if I wanted to play] e-sports.	友達は私にeスポーツをやりたいかどうか尋ねた。	接続詞	
+Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた。	接続詞	
+[Some parents ask me if e-sports is] a real sport.	何人かの両親は私にeスポーツは本当のスポーツなのかどうか尋ねた。	接続詞	
+[The e-sports player told us why he needed] mental skills.	eスポーツプレーヤ―たちは私たちになぜ精神的スキルが必要なのか伝えた。	接続詞	mental skills: 精神的な技術
 `.trim();
 
         // 動詞リスト
@@ -280,13 +294,17 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
             const [playQuestions, setPlayQuestions] = useState([]);
             const [categories, setCategories] = useState([]);
             
-            const [mode, setMode] = useState('menu');
+            const [mode, setMode] = useState('menu'); // menu, category_select, learning, trial, result, settings
+            const [nextGameMode, setNextGameMode] = useState(null); // 'learning' or 'trial' for category select
+            const [selectedCategorySet, setSelectedCategorySet] = useState(new Set()); // Multi-select categories
+
             const [currentQIndex, setCurrentQIndex] = useState(0);
             
             // Game State
             const [shuffledWords, setShuffledWords] = useState([]);
             const [selectedWords, setSelectedWords] = useState([]);
             const [draggedItem, setDraggedItem] = useState(null);
+            const [selectedCardId, setSelectedCardId] = useState(null); // クリック選択用ID
             
             const [score, setScore] = useState(0); 
             const [correctCount, setCorrectCount] = useState(0); 
@@ -343,6 +361,13 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                 setMode('menu');
             };
 
+            const clearStats = () => {
+                if (confirm("学習履歴をすべてクリアしますか？")) {
+                    localStorage.removeItem('grammarAppStats');
+                    setStats({ learningGames: 0, trialGames: 0, totalCorrect: 0, trialHighScore: 0 });
+                }
+            };
+
             const updateStats = (finalCorrectCount, finalScore, gameMode) => {
                 const newStats = { ...stats };
                 
@@ -370,17 +395,37 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                     const original = parts[0].trim();
                     let cleanOriginal = original;
                     let punctuation = "";
+                    let preText = "";
+                    let postText = "";
 
-                    if (original.match(/[.?!]$/)) {
-                        punctuation = original.slice(-1);
-                        cleanOriginal = original.slice(0, -1);
+                    // ★新ルール: [ ]の中身だけを並べ替え対象(coreText)とする
+                    let coreText = original;
+                    const match = original.match(/^(.*?)\[(.*?)\](.*?)$/);
+                    
+                    if (match) {
+                        // [ ] が見つかった場合
+                        preText = match[1].trim();
+                        coreText = match[2].trim();
+                        postText = match[3].trim();
+                    } else {
+                        // [ ] がない場合は全体を並べ替え対象
+                        coreText = original;
                     }
+
+                    // 文末記号の分離処理 (coreTextの末尾にある場合)
+                    if (coreText.match(/[.?!]$/)) {
+                        punctuation = coreText.slice(-1);
+                        coreText = coreText.slice(0, -1);
+                    }
+
+                    cleanOriginal = coreText; // 並べ替え対象の正解テキスト
 
                     let words = cleanOriginal.split(/\s+/);
                     if (words.length > 0 && words[0] !== "I") {
                         words[0] = words[0].toLowerCase();
                     }
 
+                    // 単語結合ロジック (8語以上の場合)
                     if (words.length >= 8) {
                         const groupedWords = [];
                         let i = 0;
@@ -406,6 +451,8 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                         id: index,
                         original: original,
                         cleanOriginal: cleanOriginal,
+                        preText: preText,
+                        postText: postText,
                         punctuation: punctuation,
                         japanese: parts[1] ? parts[1].trim() : "",
                         category: category,
@@ -417,16 +464,56 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                 return { loaded, cats: Array.from(cats) };
             };
 
-            const startGame = (gameMode, category = null) => {
+            // カテゴリ選択画面への遷移
+            const goToCategorySelect = (targetMode) => {
+                setNextGameMode(targetMode);
+                // 初期状態は何も選択されていない状態
+                setSelectedCategorySet(new Set()); 
+                setMode('category_select');
+            };
+
+            // カテゴリトグル
+            const toggleCategory = (cat) => {
+                const newSet = new Set(selectedCategorySet);
+                if (newSet.has(cat)) {
+                    newSet.delete(cat);
+                } else {
+                    newSet.add(cat);
+                }
+                setSelectedCategorySet(newSet);
+            };
+
+            const toggleAllCategories = () => {
+                if (selectedCategorySet.size === categories.length) {
+                    setSelectedCategorySet(new Set());
+                } else {
+                    setSelectedCategorySet(new Set(categories));
+                }
+            };
+
+            // ゲーム開始 (引数は categoryList または 'ALL' だったが、今は selectedCategorySet を使う)
+            const startGame = (gameMode, specificQList = null) => {
                 let qList = [];
+                
                 if (gameMode === 'review') {
                     if (mistakes.length === 0) return alert("復習する問題がありません");
                     qList = [...mistakes];
+                } else if (specificQList) {
+                    // 特定リストがある場合（使わないかもだが維持）
+                    qList = specificQList;
                 } else {
-                    let pool = [...allQuestions];
-                    if (category && category !== 'ALL') {
-                        pool = pool.filter(q => q.category === category);
+                    // 通常開始: 選択されたカテゴリでフィルタリング
+                    // もしカテゴリが一つも選ばれてなければアラート
+                    if (selectedCategorySet.size === 0) {
+                        return alert("カテゴリを1つ以上選択してください。");
                     }
+
+                    let pool = allQuestions.filter(q => selectedCategorySet.has(q.category));
+                    
+                    if (pool.length === 0) {
+                        return alert("選択されたカテゴリの問題がありません。");
+                    }
+
                     pool.sort(() => Math.random() - 0.5);
                     qList = pool.slice(0, 5); 
                 }
@@ -456,12 +543,14 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                 setHintLevel(0);
                 setFeedback(null);
                 setSelectedWords([]);
+                setSelectedCardId(null);
                 setQuestionStartTime(Date.now()); 
                 
                 const words = question.words.map((w, i) => ({ 
                     text: w, 
                     id: `q${question.id}-w${i}-${Math.random().toString(36).substr(2,5)}` 
                 }));
+                // バンク（shuffledWords）は初期シャッフルのみ行い、移動によって削除しない
                 setShuffledWords(words.sort(() => Math.random() - 0.5));
             };
 
@@ -484,19 +573,19 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                 }
             };
 
-            // --- Drag & Drop Updates (for Polyfill & improved visuals) ---
+            // --- Drag & Drop ---
             const handleDragStart = (e, word, fromBank) => {
                 if (feedback === 'correct' || feedback === 'giveup') return;
                 setDraggedItem({ word, fromBank });
                 e.dataTransfer.effectAllowed = "move";
                 e.dataTransfer.setData("text/plain", JSON.stringify({word, fromBank}));
-                
-                // ドラッグ中の見た目を薄くする（Polyfillが複製を作るため、元の要素は薄くしてOK）
                 e.target.style.opacity = '0.4';
+                // ドラッグ開始時に選択状態は解除
+                setSelectedCardId(null);
             };
             
             const handleDragEnd = (e) => {
-                e.target.style.opacity = '1'; // 元に戻す
+                e.target.style.opacity = '1'; 
             };
 
             const handleDragOver = (e) => {
@@ -507,12 +596,11 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                 e.preventDefault();
                 if (!draggedItem) return;
                 
-                // 回答エリアへのドロップ（空白部分へのドロップ扱い）
                 if (targetArea === 'answer') {
                     if (draggedItem.fromBank) {
-                        moveWord(draggedItem.word, true); // バンクから末尾に追加
+                        moveWord(draggedItem.word, true);
                     } else {
-                        // 回答エリア内での移動（末尾への移動）
+                        // エリア内移動(末尾へ)
                         const newSelected = [...selectedWords];
                         const draggedIndex = newSelected.findIndex(w => w.id === draggedItem.word.id);
                         if (draggedIndex !== -1) {
@@ -522,60 +610,104 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                         }
                     }
                 } 
-                // バンクへのドロップ（戻す）
                 else if (targetArea === 'bank' && !draggedItem.fromBank) {
                     moveWord(draggedItem.word, false);
                 }
                 setDraggedItem(null);
             };
 
-            // カード同士の並べ替え・挿入ロジック
             const handleCardDrop = (e, targetWord) => {
                 e.preventDefault();
-                e.stopPropagation(); // エリアのonDrop発火を防ぐ
+                e.stopPropagation(); 
                 
                 if (!draggedItem) return;
                 const draggedWord = draggedItem.word;
                 
-                // 1. 回答エリア内での並べ替え
+                // 回答エリア内での並べ替え
                 if (!draggedItem.fromBank && selectedWords.some(w => w.id === targetWord.id)) {
                     const newSelected = [...selectedWords];
                     const draggedIndex = newSelected.findIndex(w => w.id === draggedWord.id);
                     const targetIndex = newSelected.findIndex(w => w.id === targetWord.id);
-                    
                     if (draggedIndex !== -1 && targetIndex !== -1) {
                         const [removed] = newSelected.splice(draggedIndex, 1);
                         newSelected.splice(targetIndex, 0, removed);
                         setSelectedWords(newSelected);
                     }
                 }
-                // 2. バンクから回答エリアの特定位置への挿入
+                // バンクから回答エリアへの挿入
                 else if (draggedItem.fromBank && selectedWords.some(w => w.id === targetWord.id)) {
-                    // バンクから削除
-                    setShuffledWords(prev => prev.filter(w => w.id !== draggedWord.id));
-                    // 回答エリアのターゲット位置に挿入
+                    // バンクから消さずに回答エリアへ挿入
+                    // (ただしmoveWordではshuffledWordsを触らないので、ここではselectedWordsの更新のみ行う)
+                    
+                    // 重複チェック
+                    if (selectedWords.some(w => w.id === draggedWord.id)) return;
+
                     const newSelected = [...selectedWords];
                     const targetIndex = newSelected.findIndex(w => w.id === targetWord.id);
                     newSelected.splice(targetIndex, 0, draggedWord);
                     setSelectedWords(newSelected);
                 }
-                
                 setDraggedItem(null);
             };
 
+            // --- Click Logic Update ---
             const handleWordClick = (word, fromBank) => {
                 if (feedback === 'correct' || feedback === 'giveup') return;
-                playSound('pop');
-                moveWord(word, fromBank);
+                
+                if (fromBank) {
+                    const isUsed = selectedWords.some(w => w.id === word.id);
+                    if (isUsed) {
+                        // 使用済みカードをクリックしたとき
+                        // 選択中のカードと同じなら戻す
+                        if (selectedCardId === word.id) {
+                             playSound('pop');
+                             moveWord(word, false);
+                             setSelectedCardId(null);
+                        }
+                    } else {
+                        // 未使用なら移動
+                        playSound('pop');
+                        moveWord(word, true);
+                        setSelectedCardId(null);
+                    }
+                } else {
+                    // 回答エリアのカードクリック
+                    playSound('pop');
+                    if (selectedCardId === null) {
+                        // 選択
+                        setSelectedCardId(word.id);
+                    } else if (selectedCardId === word.id) {
+                        // ★再クリックで下（バンク）に戻す
+                        moveWord(word, false);
+                        setSelectedCardId(null);
+                    } else {
+                        // スワップ
+                        swapSelectedWords(selectedCardId, word.id);
+                        setSelectedCardId(null);
+                    }
+                }
+            };
+
+            const swapSelectedWords = (id1, id2) => {
+                const newSelected = [...selectedWords];
+                const index1 = newSelected.findIndex(w => w.id === id1);
+                const index2 = newSelected.findIndex(w => w.id === id2);
+                
+                if (index1 !== -1 && index2 !== -1) {
+                    [newSelected[index1], newSelected[index2]] = [newSelected[index2], newSelected[index1]];
+                    setSelectedWords(newSelected);
+                }
             };
 
             const moveWord = (word, fromBank) => {
                 if (fromBank) {
-                    setShuffledWords(prev => prev.filter(w => w.id !== word.id));
-                    setSelectedWords(prev => [...prev, word]);
+                    // バンク -> 回答エリア (shuffledWordsは変更しない)
+                    if (!selectedWords.some(w => w.id === word.id)) {
+                        setSelectedWords(prev => [...prev, word]);
+                    }
                 } else {
+                    // 回答エリア -> バンク (selectedWordsから削除するだけ)
                     setSelectedWords(prev => prev.filter(w => w.id !== word.id));
-                    setShuffledWords(prev => [...prev, word]);
                 }
             };
 
@@ -593,6 +725,7 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
             const checkAnswer = () => {
                 const currentQ = playQuestions[currentQIndex];
                 const userSentence = selectedWords.map(w => w.text).join(' ');
+                // 判定対象は cleanOriginal (固定語句を除いた部分)
                 const isCorrect = userSentence.replace(/\s+/g, ' ').trim().toLowerCase() === currentQ.cleanOriginal.replace(/\s+/g, ' ').trim().toLowerCase();
 
                 if (isCorrect) {
@@ -611,6 +744,7 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                 setFeedback('correct');
                 playSound('correct');
                 speakText(currentQ.original);
+                setSelectedCardId(null); // 解除
                 
                 setCorrectCount(prev => prev + 1);
                 
@@ -627,6 +761,7 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                 setFeedback('giveup');
                 playSound('wrong');
                 speakText(currentQ.original);
+                setSelectedCardId(null); // 解除
                 if (!mistakes.find(m => m.id === currentQ.id)) {
                     setMistakes(prev => [...prev, currentQ]);
                 }
@@ -688,7 +823,20 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
             const getCardStyle = (word, isSelectedArea) => {
                 let style = "px-3 py-2 m-1 rounded bg-white border-2 border-gray-200 shadow-sm font-medium cursor-grab active:cursor-grabbing select-none transition-transform hover:scale-105 ";
                 if (word.text.includes(' ')) style += "border-b-4 border-blue-100 ";
-                if (hintLevel >= 1 && isVerb(word.text)) style += " !font-bold !text-blue-700 !border-blue-400 !bg-blue-50 ring-2 ring-blue-200 ";
+                
+                // 選択状態のスタイル
+                if (isSelectedArea && selectedCardId === word.id) {
+                    style += " card-selected "; // CSSクラス適用
+                }
+
+                if (hintLevel >= 1 && isVerb(word.text) && !isSelectedArea) { // バンクにある時のみ強調
+                     style += " !font-bold !text-blue-700 !border-blue-400 !bg-blue-50 ring-2 ring-blue-200 ";
+                }
+                // 回答エリアにある場合の動詞強調も維持したい場合は !isSelectedArea 条件を外す
+                if (hintLevel >= 1 && isVerb(word.text) && isSelectedArea) {
+                     style += " !font-bold !text-blue-700 !border-blue-400 ring-2 ring-blue-200 ";
+                }
+
                 return style;
             };
 
@@ -704,11 +852,11 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                         </div>
                         <StatsCard stats={stats} />
                         <div className="w-full max-w-xs space-y-3">
-                            <button onClick={() => setMode('category_select')} className="w-full flex items-center p-4 bg-white border-2 border-blue-100 rounded-xl shadow-sm hover:border-blue-500 transition-all group">
+                            <button onClick={() => goToCategorySelect('learning')} className="w-full flex items-center p-4 bg-white border-2 border-blue-100 rounded-xl shadow-sm hover:border-blue-500 transition-all group">
                                 <div className="bg-blue-100 p-2 rounded-full mr-3 text-blue-600 group-hover:bg-blue-600 group-hover:text-white"><BookOpen size={20} /></div>
                                 <div className="text-left"><div className="font-bold text-gray-800">学習モード</div><div className="text-xs text-gray-500">解説付きでじっくり</div></div>
                             </button>
-                            <button onClick={() => startGame('trial')} className="w-full flex items-center p-4 bg-white border-2 border-orange-100 rounded-xl shadow-sm hover:border-orange-500 transition-all group">
+                            <button onClick={() => goToCategorySelect('trial')} className="w-full flex items-center p-4 bg-white border-2 border-orange-100 rounded-xl shadow-sm hover:border-orange-500 transition-all group">
                                 <div className="bg-orange-100 p-2 rounded-full mr-3 text-orange-600 group-hover:bg-orange-600 group-hover:text-white"><Clock size={20} /></div>
                                 <div className="text-left"><div className="font-bold text-gray-800">タイムトライアル</div><div className="text-xs text-gray-500">スコアアタック</div></div>
                             </button>
@@ -719,21 +867,52 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                                 </button>
                             )}
                         </div>
-                        <button onClick={() => setMode('settings')} className="text-gray-400 hover:text-gray-600 flex items-center text-xs mt-4"><Settings size={14} className="mr-1" /> 教員用設定</button>
+                        <div className="flex items-center space-x-2 mt-4">
+                            <button onClick={() => setMode('settings')} className="text-gray-400 hover:text-gray-600 flex items-center text-xs"><Settings size={14} className="mr-1" /> 教員用設定</button>
+                            <button onClick={clearStats} className="text-gray-400 hover:text-red-500 flex items-center text-xs border-l pl-2 border-gray-300" title="学習履歴をクリア"><Trash2 size={14} className="mr-1" /> 履歴クリア</button>
+                        </div>
                     </div>
                 );
             }
 
             if (mode === 'category_select') {
                 return (
-                    <div className="flex flex-col h-full py-4 px-4">
-                        <div className="flex items-center justify-between mb-4">
+                    <div className="flex flex-col h-full p-4 items-center">
+                        <div className="flex items-center justify-between mb-4 w-full max-w-xl">
                             <button onClick={() => setMode('menu')} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
-                            <h2 className="text-lg font-bold text-gray-800">カテゴリ選択</h2><div className="w-8"></div>
+                            <h2 className="text-lg font-bold text-gray-800">カテゴリ選択 ({nextGameMode === 'trial' ? 'Time Trial' : 'Learning'})</h2><div className="w-8"></div>
                         </div>
-                        <div className="flex-1 overflow-y-auto grid grid-cols-2 gap-3 pb-4 max-w-2xl mx-auto w-full">
-                            <button onClick={() => startGame('learning', 'ALL')} className="p-3 rounded-lg border-2 border-blue-100 bg-blue-50 text-blue-800 font-bold hover:bg-blue-100 text-sm text-center col-span-2">すべて (ランダム)</button>
-                            {categories.map(cat => (<button key={cat} onClick={() => startGame('learning', cat)} className="p-3 rounded-lg border-2 border-gray-100 hover:border-blue-400 hover:bg-white transition-all font-medium text-gray-700 text-sm text-center shadow-sm">{cat}</button>))}
+                        
+                        <div className="flex-1 w-full max-w-md overflow-y-auto space-y-3 pb-4 custom-scrollbar pr-1">
+                            {categories.map(cat => {
+                                const isSelected = selectedCategorySet.has(cat);
+                                return (
+                                    <button 
+                                        key={cat} 
+                                        onClick={() => toggleCategory(cat)} 
+                                        className={`w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between ${isSelected ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-gray-200 bg-white text-gray-500 hover:border-blue-300'}`}
+                                    >
+                                        <span className="font-bold text-lg">{cat}</span>
+                                        {isSelected ? <CheckSquare size={24} className="text-blue-500" /> : <Square size={24} className="text-gray-300" />}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <div className="w-full max-w-md flex justify-end mt-2 mb-4">
+                             <button onClick={toggleAllCategories} className="text-sm text-blue-600 font-bold px-4 py-2 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                                {selectedCategorySet.size === categories.length ? "全解除" : "すべて選択"}
+                            </button>
+                        </div>
+
+                        <div className="w-full max-w-md pt-2 border-t border-gray-100">
+                            <button 
+                                onClick={() => startGame(nextGameMode)} 
+                                disabled={selectedCategorySet.size === 0}
+                                className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all ${selectedCategorySet.size === 0 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-[1.02]'}`}
+                            >
+                                スタート
+                            </button>
                         </div>
                     </div>
                 );
@@ -745,7 +924,7 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                         <div className="flex items-center justify-between mb-4"><h2 className="text-lg font-bold flex items-center text-gray-800"><Settings className="mr-2"/> 設定</h2><button onClick={() => setMode('menu')} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button></div>
                         <div className="mb-4 flex-1 flex flex-col">
                             <label className="block text-xs font-bold mb-1 text-gray-700">問題データ (CSV)</label>
-                            <div className="text-xs text-gray-500 mb-2 bg-blue-50 p-2 rounded leading-tight">英文[TAB]日本語[TAB]カテゴリ[TAB]解説(省略可)<br/>※4列目に語句の解説などを入れるとヒント2で表示されます。</div>
+                            <div className="text-xs text-gray-500 mb-2 bg-blue-50 p-2 rounded leading-tight">英文[TAB]日本語[TAB]カテゴリ[TAB]解説(省略可)<br/>※[ ]で囲むと並べ替え対象になります。例: Last Sunday, [I played]...<br/>※4列目に語句の解説などを入れるとヒント2で表示されます。</div>
                             <textarea value={rawCsvData} onChange={(e) => setRawCsvData(e.target.value)} className="flex-1 p-2 border border-gray-300 rounded-lg font-mono text-xs focus:ring-2 focus:ring-blue-500 outline-none resize-none"/>
                         </div>
                         <div className="mb-4"><label className="block text-xs font-bold mb-1 text-gray-700">制限時間(秒)</label><input type="number" value={maxTime} onChange={(e) => setMaxTime(Number(e.target.value))} className="p-2 border border-gray-300 rounded-lg w-24 text-center"/></div>
@@ -778,7 +957,7 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                         )}
                         <div className="flex space-x-3">
                             <button onClick={() => setMode('menu')} className="px-6 py-3 bg-white border border-gray-300 text-gray-600 rounded-xl font-bold hover:bg-gray-50">メニュー</button>
-                            <button onClick={() => startGame(mode === 'trial' ? 'trial' : 'learning', 'ALL')} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg">もう一度</button>
+                            <button onClick={() => startGame(mode === 'trial' ? 'trial' : 'learning', Array.from(selectedCategorySet))} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg">もう一度</button>
                         </div>
                     </div>
                 );
@@ -818,10 +997,16 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                             </div>
                         )}
                         <div className="space-y-6">
+                            {/* Answer Area */}
                             <div 
                                 className={`min-h-[80px] rounded-xl p-3 flex flex-wrap items-center justify-center gap-2 border-2 border-dashed transition-colors ${feedback === 'correct' ? 'bg-green-50 border-green-300 border-solid' : 'bg-slate-50 border-slate-300'}`}
                                 onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'answer')}
                             >
+                                {/* 固定語句（前） */}
+                                {currentQ.preText && (
+                                    <span className="font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded mr-1">{currentQ.preText}</span>
+                                )}
+
                                 {selectedWords.length === 0 && <div className="text-gray-400 text-sm pointer-events-none flex items-center"><GripVertical size={16} className="mr-1 opacity-50"/> 単語を並べてください</div>}
                                 {selectedWords.map((word) => (
                                     <div 
@@ -836,12 +1021,32 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                                         {word.text}
                                     </div>
                                 ))}
-                                {currentQ.punctuation && <div className="text-xl font-bold text-gray-800 self-center pt-1">{currentQ.punctuation}</div>}
+
+                                {/* 固定語句（後）or 文末記号 */}
+                                {currentQ.postText ? (
+                                    <span className="font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded ml-1">{currentQ.postText}{currentQ.punctuation}</span>
+                                ) : (
+                                    currentQ.punctuation && <div className="text-xl font-bold text-gray-800 self-center pt-1">{currentQ.punctuation}</div>
+                                )}
                             </div>
+
+                            {/* Word Bank */}
                             <div className="flex flex-wrap justify-center gap-2 min-h-[60px]" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'bank')}>
-                                {shuffledWords.map((word) => (
-                                    <div key={word.id} draggable={!feedback} onDragStart={(e) => handleDragStart(e, word, true)} onDragEnd={handleDragEnd} onClick={() => handleWordClick(word, true)} className={getCardStyle(word, false)}>{word.text}</div>
-                                ))}
+                                {shuffledWords.map((word) => {
+                                    const isUsed = selectedWords.some(w => w.id === word.id);
+                                    return (
+                                        <div 
+                                            key={word.id} 
+                                            draggable={!isUsed && !feedback} 
+                                            onDragStart={(e) => !isUsed && handleDragStart(e, word, true)} 
+                                            onDragEnd={handleDragEnd} 
+                                            onClick={() => !isUsed && handleWordClick(word, true)} 
+                                            className={`${getCardStyle(word, false)} ${isUsed ? 'card-used' : ''}`}
+                                        >
+                                            {word.text}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
