@@ -309,7 +309,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
             const [isTrialChecked, setIsTrialChecked] = useState(false); // タイムトライアル一括チェック済みか
 
             const [draggedItem, setDraggedItem] = useState(null);
-            const [selectedCardId, setSelectedCardId] = useState(null); 
+            const [selectedCardId, setSelectedCardId] = useState(null); // クリック選択用ID
             
             const [score, setScore] = useState(0); 
             const [correctCount, setCorrectCount] = useState(0); 
@@ -403,29 +403,34 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                     let preText = "";
                     let postText = "";
 
+                    // ★新ルール: [ ]の中身だけを並べ替え対象(coreText)とする
                     let coreText = original;
                     const match = original.match(/^(.*?)\[(.*?)\](.*?)$/);
                     
                     if (match) {
+                        // [ ] が見つかった場合
                         preText = match[1].trim();
                         coreText = match[2].trim();
                         postText = match[3].trim();
                     } else {
+                        // [ ] がない場合は全体を並べ替え対象
                         coreText = original;
                     }
 
+                    // 文末記号の分離処理 (coreTextの末尾にある場合)
                     if (coreText.match(/[.?!]$/)) {
                         punctuation = coreText.slice(-1);
                         coreText = coreText.slice(0, -1);
                     }
 
-                    cleanOriginal = coreText; 
+                    cleanOriginal = coreText; // 並べ替え対象の正解テキスト
 
                     let words = cleanOriginal.split(/\s+/);
                     if (words.length > 0 && words[0] !== "I") {
                         words[0] = words[0].toLowerCase();
                     }
 
+                    // 単語結合ロジック (8語以上の場合)
                     if (words.length >= 8) {
                         const groupedWords = [];
                         let i = 0;
@@ -464,12 +469,15 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 return { loaded, cats: Array.from(cats) };
             };
 
+            // カテゴリ選択画面への遷移
             const goToCategorySelect = (targetMode) => {
                 setNextGameMode(targetMode);
+                // 初期状態は何も選択されていない状態
                 setSelectedCategorySet(new Set()); 
                 setMode('category_select');
             };
 
+            // カテゴリトグル
             const toggleCategory = (cat) => {
                 const newSet = new Set(selectedCategorySet);
                 if (newSet.has(cat)) {
@@ -488,6 +496,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 }
             };
 
+            // ゲーム開始 (引数は categoryList または 'ALL' だったが、今は selectedCategorySet を使う)
             const startGame = (gameMode, specificQList = null) => {
                 let qList = [];
                 
@@ -495,15 +504,21 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                     if (mistakes.length === 0) return alert("復習する問題がありません");
                     qList = [...mistakes];
                 } else if (specificQList) {
+                    // 特定リストがある場合（使わないかもだが維持）
                     qList = specificQList;
                 } else {
+                    // 通常開始: 選択されたカテゴリでフィルタリング
+                    // もしカテゴリが一つも選ばれてなければアラート
                     if (selectedCategorySet.size === 0) {
                         return alert("カテゴリを1つ以上選択してください。");
                     }
+
                     let pool = allQuestions.filter(q => selectedCategorySet.has(q.category));
+                    
                     if (pool.length === 0) {
                         return alert("選択されたカテゴリの問題がありません。");
                     }
+
                     pool.sort(() => Math.random() - 0.5);
                     qList = pool.slice(0, 5); 
                 }
@@ -560,6 +575,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                     text: w, 
                     id: `q${question.id}-w${i}-${Math.random().toString(36).substr(2,5)}` 
                 }));
+                // バンク（shuffledWords）は初期シャッフルのみ行い、移動によって削除しない
                 setShuffledWords(words.sort(() => Math.random() - 0.5));
             };
 
@@ -574,11 +590,11 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 return () => clearInterval(timer);
             }, [isTimerActive, timeLeft, mode]);
 
-            const finishGame = () => {
+            const finishGame = (finalScore = score, finalCorrectCount = correctCount) => {
                 setIsTimerActive(false);
                 setMode('result');
                 if (mode === 'learning' || mode === 'trial') {
-                    updateStats(correctCount, score, mode);
+                    updateStats(finalCorrectCount, finalScore, mode);
                 }
             };
 
@@ -726,29 +742,61 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 });
             };
 
+            const handleTrialSwapInPlace = (qIndex, id1, id2) => {
+                setTrialState(prev => {
+                    const newState = [...prev];
+                    const targetQ = newState[qIndex];
+                    const idx1 = targetQ.selected.findIndex(w => w.id === id1);
+                    const idx2 = targetQ.selected.findIndex(w => w.id === id2);
+                    
+                    if (idx1 !== -1 && idx2 !== -1) {
+                        [targetQ.selected[idx1], targetQ.selected[idx2]] = [targetQ.selected[idx2], targetQ.selected[idx1]];
+                    }
+                    return newState;
+                });
+            };
+
             const handleTrialWordClick = (qIndex, word, fromBank) => {
                 if (isTrialChecked) return;
                 playSound('pop');
                 
-                // Trial mode specific selection logic if needed (simplified: just toggle move)
-                // For now, simple toggle like behavior, ignoring complex selection/swap for click in Trial to keep it simple or implement if requested.
-                // Re-using the "Click to move" logic:
-                
-                setTrialState(prev => {
-                    const newState = [...prev];
-                    const targetQ = newState[qIndex];
+                if (fromBank) {
+                    const currentQState = trialState[qIndex];
+                    const isUsed = currentQState.selected.some(w => w.id === word.id);
                     
-                    if (fromBank) {
-                        // Bank -> Answer if not used
-                        if (!targetQ.selected.some(w => w.id === word.id)) {
-                            targetQ.selected.push(word);
+                    if (isUsed) {
+                        // 使用済みカードをクリック: 選択中なら戻す
+                        if (selectedCardId === word.id) {
+                            handleTrialMoveWord(qIndex, word, false, false);
+                            setSelectedCardId(null);
                         }
                     } else {
-                        // Answer -> Bank
-                        targetQ.selected = targetQ.selected.filter(w => w.id !== word.id);
+                        // 未使用: 移動
+                        handleTrialMoveWord(qIndex, word, true, true);
+                        setSelectedCardId(null);
                     }
-                    return newState;
-                });
+                } else {
+                    // 回答エリア
+                    if (selectedCardId === null) {
+                        setSelectedCardId(word.id);
+                    } else if (selectedCardId === word.id) {
+                        // 再クリックで戻す
+                        handleTrialMoveWord(qIndex, word, false, false);
+                        setSelectedCardId(null);
+                    } else {
+                        // スワップ判定
+                        const currentQState = trialState[qIndex];
+                        const sourceWordInCurrent = currentQState.selected.find(w => w.id === selectedCardId);
+                        
+                        if (sourceWordInCurrent) {
+                            handleTrialSwapInPlace(qIndex, selectedCardId, word.id);
+                            setSelectedCardId(null);
+                        } else {
+                            // 異なる問題のカードを選択していた場合 -> 切り替え
+                            setSelectedCardId(word.id);
+                        }
+                    }
+                }
             };
 
             const checkTrialAnswers = () => {
@@ -800,7 +848,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 else playSound('wrong');
                 
                 setTimeout(() => {
-                    finishGame();
+                    finishGame(totalScore, trialCorrectCount); // Pass calculated values directly
                 }, 4000); // 4秒後に結果画面へ（結果を確認する時間を与える）
             };
 
@@ -1138,7 +1186,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                                                 onDragEnd={handleDragEnd}
                                                 onDrop={(e) => handleCardDrop(e, word, idx)}
                                                 onClick={() => handleTrialWordClick(idx, word, false)} 
-                                                className={getCardStyle(word, true)}
+                                                className={getCardStyle(word, true, selectedCardId === word.id)}
                                             >
                                                 {word.text}
                                             </div>
@@ -1283,7 +1331,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                                             draggable={!isUsed && !feedback} 
                                             onDragStart={(e) => !isUsed && handleDragStart(e, word, true)} 
                                             onDragEnd={handleDragEnd} 
-                                            onClick={() => !isUsed && handleWordClick(word, true)} 
+                                            onClick={() => handleWordClick(word, true)} 
                                             className={`${getCardStyle(word, false)} ${isUsed ? 'card-used' : ''}`}
                                         >
                                             {word.text}
