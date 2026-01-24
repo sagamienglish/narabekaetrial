@@ -294,17 +294,22 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
             const [playQuestions, setPlayQuestions] = useState([]);
             const [categories, setCategories] = useState([]);
             
-            const [mode, setMode] = useState('menu'); // menu, category_select, learning, trial, result, settings
-            const [nextGameMode, setNextGameMode] = useState(null); // 'learning' or 'trial' for category select
-            const [selectedCategorySet, setSelectedCategorySet] = useState(new Set()); // Multi-select categories
+            const [mode, setMode] = useState('menu'); 
+            const [nextGameMode, setNextGameMode] = useState(null); 
+            const [selectedCategorySet, setSelectedCategorySet] = useState(new Set()); 
 
             const [currentQIndex, setCurrentQIndex] = useState(0);
             
-            // Game State
+            // Game State (Learning Mode)
             const [shuffledWords, setShuffledWords] = useState([]);
             const [selectedWords, setSelectedWords] = useState([]);
+            
+            // Game State (Trial Mode) - 5問一括管理用
+            const [trialState, setTrialState] = useState([]); // [{id:qId, selected:[], bank:[], status:'playing'|'correct'|'wrong'}]
+            const [isTrialChecked, setIsTrialChecked] = useState(false); // タイムトライアル一括チェック済みか
+
             const [draggedItem, setDraggedItem] = useState(null);
-            const [selectedCardId, setSelectedCardId] = useState(null); // クリック選択用ID
+            const [selectedCardId, setSelectedCardId] = useState(null); 
             
             const [score, setScore] = useState(0); 
             const [correctCount, setCorrectCount] = useState(0); 
@@ -398,34 +403,29 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                     let preText = "";
                     let postText = "";
 
-                    // ★新ルール: [ ]の中身だけを並べ替え対象(coreText)とする
                     let coreText = original;
                     const match = original.match(/^(.*?)\[(.*?)\](.*?)$/);
                     
                     if (match) {
-                        // [ ] が見つかった場合
                         preText = match[1].trim();
                         coreText = match[2].trim();
                         postText = match[3].trim();
                     } else {
-                        // [ ] がない場合は全体を並べ替え対象
                         coreText = original;
                     }
 
-                    // 文末記号の分離処理 (coreTextの末尾にある場合)
                     if (coreText.match(/[.?!]$/)) {
                         punctuation = coreText.slice(-1);
                         coreText = coreText.slice(0, -1);
                     }
 
-                    cleanOriginal = coreText; // 並べ替え対象の正解テキスト
+                    cleanOriginal = coreText; 
 
                     let words = cleanOriginal.split(/\s+/);
                     if (words.length > 0 && words[0] !== "I") {
                         words[0] = words[0].toLowerCase();
                     }
 
-                    // 単語結合ロジック (8語以上の場合)
                     if (words.length >= 8) {
                         const groupedWords = [];
                         let i = 0;
@@ -464,15 +464,12 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 return { loaded, cats: Array.from(cats) };
             };
 
-            // カテゴリ選択画面への遷移
             const goToCategorySelect = (targetMode) => {
                 setNextGameMode(targetMode);
-                // 初期状態は何も選択されていない状態
                 setSelectedCategorySet(new Set()); 
                 setMode('category_select');
             };
 
-            // カテゴリトグル
             const toggleCategory = (cat) => {
                 const newSet = new Set(selectedCategorySet);
                 if (newSet.has(cat)) {
@@ -491,7 +488,6 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 }
             };
 
-            // ゲーム開始 (引数は categoryList または 'ALL' だったが、今は selectedCategorySet を使う)
             const startGame = (gameMode, specificQList = null) => {
                 let qList = [];
                 
@@ -499,21 +495,15 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                     if (mistakes.length === 0) return alert("復習する問題がありません");
                     qList = [...mistakes];
                 } else if (specificQList) {
-                    // 特定リストがある場合（使わないかもだが維持）
                     qList = specificQList;
                 } else {
-                    // 通常開始: 選択されたカテゴリでフィルタリング
-                    // もしカテゴリが一つも選ばれてなければアラート
                     if (selectedCategorySet.size === 0) {
                         return alert("カテゴリを1つ以上選択してください。");
                     }
-
                     let pool = allQuestions.filter(q => selectedCategorySet.has(q.category));
-                    
                     if (pool.length === 0) {
                         return alert("選択されたカテゴリの問題がありません。");
                     }
-
                     pool.sort(() => Math.random() - 0.5);
                     qList = pool.slice(0, 5); 
                 }
@@ -524,17 +514,37 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 setCurrentQIndex(0);
                 setScore(0);
                 setCorrectCount(0);
+                setFeedback(null);
+                setHintLevel(0);
+                
                 if (gameMode !== 'review') setMistakes([]);
                 
-                loadQuestion(qList[0]);
+                setMode(gameMode);
 
                 if (gameMode === 'trial') {
+                    // Trial Mode: Initialize 5 questions state
+                    const initialTrialState = qList.map(q => {
+                        const words = q.words.map((w, i) => ({ 
+                            text: w, 
+                            id: `q${q.id}-w${i}-${Math.random().toString(36).substr(2,5)}` 
+                        })).sort(() => Math.random() - 0.5);
+                        
+                        return {
+                            question: q,
+                            selected: [],
+                            bank: words,
+                            status: 'playing' // playing, correct, wrong
+                        };
+                    });
+                    setTrialState(initialTrialState);
+                    setIsTrialChecked(false);
                     setTimeLeft(maxTime);
                     setIsTimerActive(true);
-                    setMode('trial');
+                    setQuestionStartTime(Date.now()); // Overall start time
                 } else {
+                    // Learning Mode: Init first question
+                    loadQuestion(qList[0]);
                     setIsTimerActive(false);
-                    setMode('learning');
                 }
             };
 
@@ -550,7 +560,6 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                     text: w, 
                     id: `q${question.id}-w${i}-${Math.random().toString(36).substr(2,5)}` 
                 }));
-                // バンク（shuffledWords）は初期シャッフルのみ行い、移動によって削除しない
                 setShuffledWords(words.sort(() => Math.random() - 0.5));
             };
 
@@ -560,7 +569,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                     timer = setInterval(() => setTimeLeft(p => p - 1), 1000);
                 } else if (timeLeft === 0 && isTimerActive) {
                     setIsTimerActive(false);
-                    finishGame();
+                    checkTrialAnswers(); // Time up -> Auto check
                 }
                 return () => clearInterval(timer);
             }, [isTimerActive, timeLeft, mode]);
@@ -573,14 +582,15 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 }
             };
 
-            // --- Drag & Drop ---
-            const handleDragStart = (e, word, fromBank) => {
-                if (feedback === 'correct' || feedback === 'giveup') return;
-                setDraggedItem({ word, fromBank });
+            // --- Drag & Drop (Unified) ---
+            const handleDragStart = (e, word, fromBank, qIndex = -1) => {
+                if (mode === 'learning' && (feedback === 'correct' || feedback === 'giveup')) return;
+                if (mode === 'trial' && isTrialChecked) return;
+
+                setDraggedItem({ word, fromBank, qIndex });
                 e.dataTransfer.effectAllowed = "move";
                 e.dataTransfer.setData("text/plain", JSON.stringify({word, fromBank}));
                 e.target.style.opacity = '0.4';
-                // ドラッグ開始時に選択状態は解除
                 setSelectedCardId(null);
             };
             
@@ -592,96 +602,234 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 e.preventDefault(); e.dataTransfer.dropEffect = "move";
             };
 
-            const handleDrop = (e, targetArea) => {
+            const handleDrop = (e, targetArea, qIndex = -1) => {
                 e.preventDefault();
                 if (!draggedItem) return;
                 
-                if (targetArea === 'answer') {
-                    if (draggedItem.fromBank) {
-                        moveWord(draggedItem.word, true);
-                    } else {
-                        // エリア内移動(末尾へ)
-                        const newSelected = [...selectedWords];
-                        const draggedIndex = newSelected.findIndex(w => w.id === draggedItem.word.id);
-                        if (draggedIndex !== -1) {
-                            const [removed] = newSelected.splice(draggedIndex, 1);
-                            newSelected.push(removed);
-                            setSelectedWords(newSelected);
+                // Cross-question drop prevention in Trial mode
+                if (mode === 'trial' && draggedItem.qIndex !== qIndex) return;
+
+                if (mode === 'trial') {
+                    handleTrialMoveWord(qIndex, draggedItem.word, draggedItem.fromBank, targetArea === 'answer');
+                } else {
+                    // Learning Mode Logic
+                    if (targetArea === 'answer') {
+                        if (draggedItem.fromBank) moveWord(draggedItem.word, true);
+                        else {
+                            // Move within answer (to end)
+                            const newSelected = [...selectedWords];
+                            const idx = newSelected.findIndex(w => w.id === draggedItem.word.id);
+                            if (idx !== -1) {
+                                const [removed] = newSelected.splice(idx, 1);
+                                newSelected.push(removed);
+                                setSelectedWords(newSelected);
+                            }
                         }
+                    } else if (targetArea === 'bank' && !draggedItem.fromBank) {
+                        moveWord(draggedItem.word, false);
                     }
-                } 
-                else if (targetArea === 'bank' && !draggedItem.fromBank) {
-                    moveWord(draggedItem.word, false);
                 }
                 setDraggedItem(null);
             };
 
-            const handleCardDrop = (e, targetWord) => {
+            const handleCardDrop = (e, targetWord, qIndex = -1) => {
                 e.preventDefault();
                 e.stopPropagation(); 
-                
                 if (!draggedItem) return;
-                const draggedWord = draggedItem.word;
                 
-                // 回答エリア内での並べ替え
-                if (!draggedItem.fromBank && selectedWords.some(w => w.id === targetWord.id)) {
-                    const newSelected = [...selectedWords];
-                    const draggedIndex = newSelected.findIndex(w => w.id === draggedWord.id);
-                    const targetIndex = newSelected.findIndex(w => w.id === targetWord.id);
-                    if (draggedIndex !== -1 && targetIndex !== -1) {
-                        const [removed] = newSelected.splice(draggedIndex, 1);
-                        newSelected.splice(targetIndex, 0, removed);
+                // Cross-question check
+                if (mode === 'trial' && draggedItem.qIndex !== qIndex) return;
+
+                const draggedWord = draggedItem.word;
+
+                if (mode === 'trial') {
+                    // Trial Mode Card Swap/Insert logic within specific question state
+                    handleTrialCardSwap(qIndex, draggedWord, targetWord, draggedItem.fromBank);
+                } else {
+                    // Learning Mode logic
+                    if (!draggedItem.fromBank && selectedWords.some(w => w.id === targetWord.id)) {
+                        // Reorder in answer
+                        const newSelected = [...selectedWords];
+                        const dIdx = newSelected.findIndex(w => w.id === draggedWord.id);
+                        const tIdx = newSelected.findIndex(w => w.id === targetWord.id);
+                        if (dIdx !== -1 && tIdx !== -1) {
+                            const [removed] = newSelected.splice(dIdx, 1);
+                            newSelected.splice(tIdx, 0, removed);
+                            setSelectedWords(newSelected);
+                        }
+                    } else if (draggedItem.fromBank && selectedWords.some(w => w.id === targetWord.id)) {
+                        // Insert from bank
+                        if (selectedWords.some(w => w.id === draggedWord.id)) return;
+                        const newSelected = [...selectedWords];
+                        const tIdx = newSelected.findIndex(w => w.id === targetWord.id);
+                        newSelected.splice(tIdx, 0, draggedWord);
                         setSelectedWords(newSelected);
                     }
                 }
-                // バンクから回答エリアへの挿入
-                else if (draggedItem.fromBank && selectedWords.some(w => w.id === targetWord.id)) {
-                    // バンクから消さずに回答エリアへ挿入
-                    // (ただしmoveWordではshuffledWordsを触らないので、ここではselectedWordsの更新のみ行う)
-                    
-                    // 重複チェック
-                    if (selectedWords.some(w => w.id === draggedWord.id)) return;
-
-                    const newSelected = [...selectedWords];
-                    const targetIndex = newSelected.findIndex(w => w.id === targetWord.id);
-                    newSelected.splice(targetIndex, 0, draggedWord);
-                    setSelectedWords(newSelected);
-                }
                 setDraggedItem(null);
             };
 
-            // --- Click Logic Update ---
+            // --- Trial Mode Logic Handlers ---
+            const handleTrialMoveWord = (qIndex, word, fromBank, toAnswer) => {
+                setTrialState(prev => {
+                    const newState = [...prev];
+                    const targetQ = newState[qIndex];
+                    
+                    if (toAnswer) {
+                        // Move to Answer
+                        if (!fromBank) {
+                             // Already in answer, move to end (simple move)
+                             const idx = targetQ.selected.findIndex(w => w.id === word.id);
+                             if (idx !== -1) {
+                                 const [removed] = targetQ.selected.splice(idx, 1);
+                                 targetQ.selected.push(removed);
+                             }
+                        } else {
+                             // From bank to answer
+                             if (!targetQ.selected.some(w => w.id === word.id)) {
+                                 targetQ.selected.push(word);
+                             }
+                        }
+                    } else {
+                        // Move to Bank (Remove from Answer)
+                        targetQ.selected = targetQ.selected.filter(w => w.id !== word.id);
+                    }
+                    return newState;
+                });
+            };
+
+            const handleTrialCardSwap = (qIndex, draggedWord, targetWord, fromBank) => {
+                setTrialState(prev => {
+                    const newState = [...prev];
+                    const targetQ = newState[qIndex];
+                    
+                    if (!fromBank) {
+                        // Reorder in answer
+                        const dIdx = targetQ.selected.findIndex(w => w.id === draggedWord.id);
+                        const tIdx = targetQ.selected.findIndex(w => w.id === targetWord.id);
+                        if (dIdx !== -1 && tIdx !== -1) {
+                            const [removed] = targetQ.selected.splice(dIdx, 1);
+                            targetQ.selected.splice(tIdx, 0, removed);
+                        }
+                    } else {
+                        // Insert from bank
+                        if (!targetQ.selected.some(w => w.id === draggedWord.id)) {
+                            const tIdx = targetQ.selected.findIndex(w => w.id === targetWord.id);
+                            if (tIdx !== -1) {
+                                targetQ.selected.splice(tIdx, 0, draggedWord);
+                            } else {
+                                targetQ.selected.push(draggedWord); // Fallback
+                            }
+                        }
+                    }
+                    return newState;
+                });
+            };
+
+            const handleTrialWordClick = (qIndex, word, fromBank) => {
+                if (isTrialChecked) return;
+                playSound('pop');
+                
+                // Trial mode specific selection logic if needed (simplified: just toggle move)
+                // For now, simple toggle like behavior, ignoring complex selection/swap for click in Trial to keep it simple or implement if requested.
+                // Re-using the "Click to move" logic:
+                
+                setTrialState(prev => {
+                    const newState = [...prev];
+                    const targetQ = newState[qIndex];
+                    
+                    if (fromBank) {
+                        // Bank -> Answer if not used
+                        if (!targetQ.selected.some(w => w.id === word.id)) {
+                            targetQ.selected.push(word);
+                        }
+                    } else {
+                        // Answer -> Bank
+                        targetQ.selected = targetQ.selected.filter(w => w.id !== word.id);
+                    }
+                    return newState;
+                });
+            };
+
+            const checkTrialAnswers = () => {
+                setIsTimerActive(false);
+                setIsTrialChecked(true);
+                
+                let trialCorrectCount = 0;
+                let newMistakes = [];
+
+                const updatedState = trialState.map(item => {
+                    const userSentence = item.selected.map(w => w.text).join(' ');
+                    const isCorrect = userSentence.replace(/\s+/g, ' ').trim().toLowerCase() === item.question.cleanOriginal.replace(/\s+/g, ' ').trim().toLowerCase();
+                    
+                    let status = 'wrong';
+                    if (isCorrect) {
+                        status = 'correct';
+                        trialCorrectCount++;
+                    } else {
+                        newMistakes.push(item.question);
+                    }
+                    return { ...item, status };
+                });
+
+                setTrialState(updatedState);
+                setCorrectCount(trialCorrectCount);
+                if (newMistakes.length > 0) {
+                    // Merge unique mistakes
+                    setMistakes(prev => {
+                        const ids = new Set(prev.map(m => m.id));
+                        const added = newMistakes.filter(m => !ids.has(m.id));
+                        return [...prev, ...added];
+                    });
+                }
+
+                // Score Calculation
+                // Base: 1000 per question. Time Penalty: total seconds used * 2 (softer penalty for 5 questions)
+                const totalBase = 1000 * 5; 
+                const timeUsed = (Date.now() - questionStartTime) / 1000;
+                const timePenalty = Math.floor(timeUsed) * 5; 
+                // Penalty for wrong answers: -800 per wrong (heavy penalty)
+                const wrongPenalty = (5 - trialCorrectCount) * 800;
+                
+                let totalScore = totalBase - timePenalty - wrongPenalty;
+                if (totalScore < 0) totalScore = 0;
+                
+                setScore(totalScore);
+                
+                if (trialCorrectCount === 5) playSound('correct');
+                else playSound('wrong');
+                
+                setTimeout(() => {
+                    finishGame();
+                }, 4000); // 4秒後に結果画面へ（結果を確認する時間を与える）
+            };
+
+
+            // --- Learning Mode Logic Handlers ---
             const handleWordClick = (word, fromBank) => {
                 if (feedback === 'correct' || feedback === 'giveup') return;
                 
                 if (fromBank) {
                     const isUsed = selectedWords.some(w => w.id === word.id);
                     if (isUsed) {
-                        // 使用済みカードをクリックしたとき
-                        // 選択中のカードと同じなら戻す
                         if (selectedCardId === word.id) {
                              playSound('pop');
                              moveWord(word, false);
                              setSelectedCardId(null);
                         }
                     } else {
-                        // 未使用なら移動
                         playSound('pop');
                         moveWord(word, true);
                         setSelectedCardId(null);
                     }
                 } else {
-                    // 回答エリアのカードクリック
                     playSound('pop');
                     if (selectedCardId === null) {
-                        // 選択
                         setSelectedCardId(word.id);
                     } else if (selectedCardId === word.id) {
-                        // ★再クリックで下（バンク）に戻す
                         moveWord(word, false);
                         setSelectedCardId(null);
                     } else {
-                        // スワップ
                         swapSelectedWords(selectedCardId, word.id);
                         setSelectedCardId(null);
                     }
@@ -692,7 +840,6 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 const newSelected = [...selectedWords];
                 const index1 = newSelected.findIndex(w => w.id === id1);
                 const index2 = newSelected.findIndex(w => w.id === id2);
-                
                 if (index1 !== -1 && index2 !== -1) {
                     [newSelected[index1], newSelected[index2]] = [newSelected[index2], newSelected[index1]];
                     setSelectedWords(newSelected);
@@ -701,12 +848,10 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
 
             const moveWord = (word, fromBank) => {
                 if (fromBank) {
-                    // バンク -> 回答エリア (shuffledWordsは変更しない)
                     if (!selectedWords.some(w => w.id === word.id)) {
                         setSelectedWords(prev => [...prev, word]);
                     }
                 } else {
-                    // 回答エリア -> バンク (selectedWordsから削除するだけ)
                     setSelectedWords(prev => prev.filter(w => w.id !== word.id));
                 }
             };
@@ -716,7 +861,6 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 const duration = (Date.now() - questionStartTime) / 1000;
                 const timePenalty = Math.floor(duration) * 10;
                 const hintPenalty = hintLevel * 300;
-                
                 let p = basePoints - timePenalty - hintPenalty;
                 if (p < 100) p = 100; 
                 return p;
@@ -725,7 +869,6 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
             const checkAnswer = () => {
                 const currentQ = playQuestions[currentQIndex];
                 const userSentence = selectedWords.map(w => w.text).join(' ');
-                // 判定対象は cleanOriginal (固定語句を除いた部分)
                 const isCorrect = userSentence.replace(/\s+/g, ' ').trim().toLowerCase() === currentQ.cleanOriginal.replace(/\s+/g, ' ').trim().toLowerCase();
 
                 if (isCorrect) {
@@ -744,16 +887,9 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 setFeedback('correct');
                 playSound('correct');
                 speakText(currentQ.original);
-                setSelectedCardId(null); // 解除
-                
+                setSelectedCardId(null); 
                 setCorrectCount(prev => prev + 1);
-                
-                if (mode === 'trial') {
-                    const points = calculateScorePoints();
-                    setScore(prev => prev + points);
-                } else {
-                    setScore(prev => prev + 1);
-                }
+                setScore(prev => prev + 1);
             };
 
             const handleGiveUp = () => {
@@ -761,7 +897,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 setFeedback('giveup');
                 playSound('wrong');
                 speakText(currentQ.original);
-                setSelectedCardId(null); // 解除
+                setSelectedCardId(null); 
                 if (!mistakes.find(m => m.id === currentQ.id)) {
                     setMistakes(prev => [...prev, currentQ]);
                 }
@@ -788,7 +924,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
             const getOwlMessage = () => {
                 const currentQ = playQuestions[currentQIndex];
                 if (feedback === 'correct') {
-                    if (mode === 'trial') return `Nice!\n+${calculateScorePoints()}pts`; 
+                    if (mode === 'trial') return ""; // Trial logic handled elsewhere
                     return "Great Job!\nその調子！";
                 }
                 if (feedback === 'giveup') return "Don't worry.\n切り替えよう！";
@@ -820,20 +956,18 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 return "語順のルールを思い出して！";
             };
 
-            const getCardStyle = (word, isSelectedArea) => {
+            const getCardStyle = (word, isSelectedArea, currentSelected = false) => {
                 let style = "px-3 py-2 m-1 rounded bg-white border-2 border-gray-200 shadow-sm font-medium cursor-grab active:cursor-grabbing select-none transition-transform hover:scale-105 ";
                 if (word.text.includes(' ')) style += "border-b-4 border-blue-100 ";
                 
-                // 選択状態のスタイル
-                if (isSelectedArea && selectedCardId === word.id) {
-                    style += " card-selected "; // CSSクラス適用
+                if (isSelectedArea && currentSelected) {
+                    style += " card-selected "; 
                 }
 
-                if (hintLevel >= 1 && isVerb(word.text) && !isSelectedArea) { // バンクにある時のみ強調
+                if (mode !== 'trial' && hintLevel >= 1 && isVerb(word.text) && !isSelectedArea) { 
                      style += " !font-bold !text-blue-700 !border-blue-400 !bg-blue-50 ring-2 ring-blue-200 ";
                 }
-                // 回答エリアにある場合の動詞強調も維持したい場合は !isSelectedArea 条件を外す
-                if (hintLevel >= 1 && isVerb(word.text) && isSelectedArea) {
+                if (mode !== 'trial' && hintLevel >= 1 && isVerb(word.text) && isSelectedArea) {
                      style += " !font-bold !text-blue-700 !border-blue-400 ring-2 ring-blue-200 ";
                 }
 
@@ -939,7 +1073,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                         <Trophy size={64} className="text-yellow-400 mb-4 drop-shadow-lg" />
                         <h2 className="text-2xl font-bold text-gray-800 mb-2">結果発表</h2>
                         <div className="mb-6">
-                            {mode === 'trial' ? (
+                            {mode === 'trial' || isTrialChecked ? ( /* isTrialChecked added to detect trial finish context properly */
                                 <div className="flex flex-col items-center">
                                     <span className="text-gray-500 text-sm">TOTAL SCORE</span>
                                     <span className="text-5xl font-extrabold text-orange-500">{score}</span>
@@ -957,13 +1091,126 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                         )}
                         <div className="flex space-x-3">
                             <button onClick={() => setMode('menu')} className="px-6 py-3 bg-white border border-gray-300 text-gray-600 rounded-xl font-bold hover:bg-gray-50">メニュー</button>
-                            <button onClick={() => startGame(mode === 'trial' ? 'trial' : 'learning', Array.from(selectedCategorySet))} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg">もう一度</button>
+                            <button onClick={() => startGame(mode === 'trial' || isTrialChecked ? 'trial' : 'learning', Array.from(selectedCategorySet))} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg">もう一度</button>
                         </div>
                     </div>
                 );
             }
 
-            // Game Render
+            // --- Render: Trial Mode (List View) ---
+            if (mode === 'trial') {
+                return (
+                    <div className="flex flex-col h-full max-w-4xl mx-auto px-4 py-4 relative">
+                        <div className="flex justify-between items-center mb-2 px-2">
+                            <button onClick={() => setMode('menu')} className="text-gray-400 hover:text-gray-700"><X size={24} /></button>
+                            <div className="text-lg font-bold text-gray-700">Time Trial (5 Questions)</div>
+                            <CircularTimer timeLeft={timeLeft} maxTime={maxTime} />
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto custom-scrollbar pb-24">
+                            {trialState.map((item, idx) => (
+                                <div key={idx} className={`mb-8 p-4 rounded-2xl border-2 ${item.status === 'correct' ? 'bg-green-50 border-green-200' : item.status === 'wrong' ? 'bg-red-50 border-red-200' : 'bg-white border-blue-50'} transition-colors`}>
+                                    <div className="mb-2 font-bold text-gray-600 text-sm flex justify-between">
+                                        <span>Q{idx + 1}. {item.question.category}</span>
+                                        {isTrialChecked && (
+                                            <span className={item.status === 'correct' ? 'text-green-600' : 'text-red-600'}>
+                                                {item.status === 'correct' ? 'Correct!' : 'Wrong'}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="mb-3 font-bold text-lg text-gray-800">{item.question.japanese}</div>
+                                    
+                                    {/* Answer Area */}
+                                    <div 
+                                        className={`min-h-[60px] rounded-xl p-2 flex flex-wrap items-center gap-2 border-2 border-dashed mb-3 ${isTrialChecked ? 'pointer-events-none opacity-80' : 'bg-slate-50 border-slate-300'}`}
+                                        onDragOver={handleDragOver} 
+                                        onDrop={(e) => handleDrop(e, 'answer', idx)}
+                                    >
+                                        {item.question.preText && <span className="font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded">{item.question.preText}</span>}
+                                        
+                                        {item.selected.length === 0 && !isTrialChecked && <span className="text-gray-400 text-sm">Drag words here</span>}
+                                        
+                                        {item.selected.map((word) => (
+                                            <div 
+                                                key={word.id} 
+                                                draggable={!isTrialChecked} 
+                                                onDragStart={(e) => handleDragStart(e, word, false, idx)}
+                                                onDragEnd={handleDragEnd}
+                                                onDrop={(e) => handleCardDrop(e, word, idx)}
+                                                onClick={() => handleTrialWordClick(idx, word, false)} 
+                                                className={getCardStyle(word, true)}
+                                            >
+                                                {word.text}
+                                            </div>
+                                        ))}
+
+                                        {item.question.postText ? (
+                                            <span className="font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded">{item.question.postText}{item.question.punctuation}</span>
+                                        ) : (
+                                            item.question.punctuation && <span className="text-xl font-bold text-gray-800 self-center">{item.question.punctuation}</span>
+                                        )}
+                                    </div>
+
+                                    {/* Bank Area */}
+                                    {!isTrialChecked ? (
+                                        <div className="flex flex-wrap gap-2 min-h-[40px]" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'bank', idx)}>
+                                            {item.bank.map((word) => {
+                                                const isUsed = item.selected.some(w => w.id === word.id);
+                                                return (
+                                                    <div 
+                                                        key={word.id} 
+                                                        draggable={!isUsed} 
+                                                        onDragStart={(e) => !isUsed && handleDragStart(e, word, true, idx)} 
+                                                        onDragEnd={handleDragEnd} 
+                                                        onClick={() => !isUsed && handleTrialWordClick(idx, word, true)} 
+                                                        className={`${getCardStyle(word, false)} ${isUsed ? 'card-used' : ''}`}
+                                                    >
+                                                        {word.text}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        // Result Display after check
+                                        <div className="text-sm bg-white p-3 rounded border border-gray-100">
+                                            <div className="text-blue-900 font-serif mb-1">Answer: {item.question.original}</div>
+                                            <div className="text-gray-500 text-xs">
+                                                {getGrammarHint(item.question.category)}
+                                                {item.question.specificHint && <span className="block mt-1 text-orange-500 font-bold">Memo: {item.question.specificHint}</span>}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Footer Button */}
+                        {!isTrialChecked && (
+                            <div className="absolute bottom-4 left-0 right-0 px-4">
+                                <button 
+                                    onClick={checkTrialAnswers}
+                                    className="w-full py-4 bg-orange-500 text-white rounded-xl font-bold text-xl shadow-lg hover:bg-orange-600 transition-all"
+                                >
+                                    Finish & Check!
+                                </button>
+                            </div>
+                        )}
+                        
+                        {isTrialChecked && (
+                            <div className="absolute bottom-4 left-0 right-0 px-4 animate-slideUp">
+                                <button 
+                                    onClick={() => finishGame()}
+                                    className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-xl shadow-lg hover:bg-blue-700 transition-all"
+                                >
+                                    See Results
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                );
+            }
+
+            // --- Render: Learning Mode (Original Single View) ---
             const currentQ = playQuestions[currentQIndex];
             if (!currentQ) return <div>Loading...</div>;
 
@@ -977,13 +1224,9 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                                     <div key={idx} className={`w-2 h-2 rounded-full ${idx === currentQIndex ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
                                 ))}
                             </div>
-                            {mode === 'trial' ? (
-                                <span className="text-lg font-bold text-orange-500">Score: {score}</span>
-                            ) : (
-                                <span className="text-xs text-gray-400 font-bold">{currentQ.category}</span>
-                            )}
+                            <span className="text-xs text-gray-400 font-bold">{currentQ.category}</span>
                         </div>
-                        {mode === 'trial' ? <CircularTimer timeLeft={timeLeft} maxTime={maxTime} /> : <div className="w-8"></div>}
+                        <div className="w-8"></div>
                     </div>
 
                     <div className="flex-1 flex flex-col justify-center min-h-0">
@@ -1016,7 +1259,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                                         onDragEnd={handleDragEnd} 
                                         onDrop={(e) => handleCardDrop(e, word)}
                                         onClick={() => handleWordClick(word, false)} 
-                                        className={getCardStyle(word, true)}
+                                        className={getCardStyle(word, true, selectedCardId === word.id)}
                                     >
                                         {word.text}
                                     </div>
