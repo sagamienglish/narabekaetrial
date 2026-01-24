@@ -117,6 +117,9 @@
         const Trash2 = (props) => <IconBase {...props}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></IconBase>;
         const CheckSquare = (props) => <IconBase {...props}><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></IconBase>;
         const Square = (props) => <IconBase {...props}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></IconBase>;
+        const Crown = (props) => <IconBase {...props}><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"/></IconBase>;
+        const Award = (props) => <IconBase {...props}><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></IconBase>;
+        const Sprout = (props) => <IconBase {...props}><path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.2.4-4.8-.3-1.8-.9-2.3-2.7-1.9-4.6.3-1.3 1.3-2.6 3.2-3 2.1-.5 3.9.5 4.7 1.2Z"/></IconBase>;
 
         // --- 効果音 ---
         const playSound = (type) => {
@@ -257,36 +260,57 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
             );
         };
 
-        // --- 学習履歴表示カード ---
-        const StatsCard = ({ stats }) => (
-            <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm w-full max-w-sm animate-fadeIn">
-                <div className="flex items-center justify-between mb-3">
-                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center">
-                        <Activity size={14} className="mr-1"/> Learning Stats
+        // --- Level Calculation System (Moved outside App) ---
+        const getLevelInfo = (score) => {
+            if (score >= 200) return { level: 10, title: "Grammar God", icon: <Crown size={48} className="text-yellow-500" />, color: "text-yellow-500" };
+            if (score >= 180) return { level: 9, title: "Legend", icon: <Trophy size={48} className="text-purple-500" />, color: "text-purple-500" };
+            if (score >= 160) return { level: 8, title: "Grandmaster", icon: <Award size={48} className="text-pink-500" />, color: "text-pink-500" };
+            if (score >= 140) return { level: 7, title: "Master", icon: <Star size={48} className="text-red-500" />, color: "text-red-500" };
+            if (score >= 120) return { level: 6, title: "Expert", icon: <Zap size={48} className="text-orange-500" />, color: "text-orange-500" };
+            if (score >= 100) return { level: 5, title: "Professional", icon: <CheckCircle size={48} className="text-emerald-500" />, color: "text-emerald-500" };
+            if (score >= 80) return { level: 4, title: "Advanced", icon: <BookOpen size={48} className="text-blue-500" />, color: "text-blue-500" };
+            if (score >= 60) return { level: 3, title: "Intermediate", icon: <Activity size={48} className="text-cyan-500" />, color: "text-cyan-500" };
+            if (score >= 40) return { level: 2, title: "Beginner", icon: <Sprout size={48} className="text-lime-500" />, color: "text-lime-500" };
+            return { level: 1, title: "Novice", icon: <Sprout size={48} className="text-slate-400" />, color: "text-slate-400" };
+        };
+
+        // --- 学習履歴表示カード (Updated with Level) ---
+        const StatsCard = ({ stats }) => {
+            const levelInfo = getLevelInfo(stats.trialHighScore || 0);
+
+            return (
+                <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm w-full max-w-sm animate-fadeIn">
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center">
+                            <Activity size={14} className="mr-1"/> Learning Stats
+                        </div>
+                    </div>
+                    <div className="flex justify-around text-center divide-x divide-gray-100">
+                        <div className="px-2 flex flex-col items-center">
+                            <div className="text-2xl font-bold text-green-500">{stats.totalCorrect || 0}</div>
+                            <div className="text-[10px] text-gray-500 flex items-center mt-1">
+                                <CheckCircle size={10} className="mr-1"/> Total Correct
+                            </div>
+                        </div>
+                        <div className="px-2 flex flex-col items-center">
+                            <div className="text-2xl font-bold text-orange-500">{stats.trialHighScore || 0}</div>
+                            <div className="text-[10px] text-gray-500 flex items-center mt-1">
+                                <Trophy size={10} className="mr-1"/> High Score
+                            </div>
+                            <div className={`mt-1 text-[10px] font-bold ${levelInfo.color} bg-slate-50 px-1.5 rounded-full whitespace-nowrap`}>
+                                {levelInfo.title} (Lv.{levelInfo.level})
+                            </div>
+                        </div>
+                        <div className="px-2 flex flex-col items-center">
+                            <div className="text-2xl font-bold text-blue-500">{(stats.learningGames || 0) + (stats.trialGames || 0)}</div>
+                            <div className="text-[10px] text-gray-500 flex items-center mt-1">
+                                <Play size={10} className="mr-1"/> Games
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div className="flex justify-around text-center divide-x divide-gray-100">
-                    <div className="px-2 flex flex-col items-center">
-                        <div className="text-2xl font-bold text-green-500">{stats.totalCorrect || 0}</div>
-                        <div className="text-[10px] text-gray-500 flex items-center mt-1">
-                            <CheckCircle size={10} className="mr-1"/> Total Correct
-                        </div>
-                    </div>
-                    <div className="px-2 flex flex-col items-center">
-                        <div className="text-2xl font-bold text-orange-500">{stats.trialHighScore || 0}</div>
-                        <div className="text-[10px] text-gray-500 flex items-center mt-1">
-                            <Trophy size={10} className="mr-1"/> High Score
-                        </div>
-                    </div>
-                    <div className="px-2 flex flex-col items-center">
-                        <div className="text-2xl font-bold text-blue-500">{(stats.learningGames || 0) + (stats.trialGames || 0)}</div>
-                        <div className="text-[10px] text-gray-500 flex items-center mt-1">
-                            <Play size={10} className="mr-1"/> Games
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
+            );
+        };
 
         const App = () => {
             // State
@@ -315,8 +339,8 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
             const [correctCount, setCorrectCount] = useState(0); 
             const [questionStartTime, setQuestionStartTime] = useState(0); 
             
-            const [timeLeft, setTimeLeft] = useState(60);
-            const [maxTime, setMaxTime] = useState(60);
+            const [timeLeft, setTimeLeft] = useState(120);
+            const [maxTime, setMaxTime] = useState(120);
             const [isTimerActive, setIsTimerActive] = useState(false);
             
             const [mistakes, setMistakes] = useState([]);
@@ -831,16 +855,17 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                     });
                 }
 
-                // Score Calculation
-                // Base: 1000 per question. Time Penalty: total seconds used * 2 (softer penalty for 5 questions)
-                const totalBase = 1000 * 5; 
-                const timeUsed = (Date.now() - questionStartTime) / 1000;
-                const timePenalty = Math.floor(timeUsed) * 5; 
-                // Penalty for wrong answers: -800 per wrong (heavy penalty)
-                const wrongPenalty = (5 - trialCorrectCount) * 800;
+                // Score Calculation Update
+                // 1問20点 * 正解数
+                let totalScore = trialCorrectCount * 20;
                 
-                let totalScore = totalBase - timePenalty - wrongPenalty;
-                if (totalScore < 0) totalScore = 0;
+                // 全問正解ボーナス: 残り秒数 * 5点
+                if (trialCorrectCount === 5) {
+                    // Time upしてない場合のみボーナス計算（checkTrialAnswersがTime upで呼ばれた場合はtimeLeft=0なので自然と0）
+                    // ただし手動で押した場合は timeLeft を使う
+                    // ここでは state の timeLeft を使う
+                    totalScore += timeLeft * 5;
+                }
                 
                 setScore(totalScore);
                 
@@ -849,7 +874,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 
                 setTimeout(() => {
                     finishGame(totalScore, trialCorrectCount); // Pass calculated values directly
-                }, 4000); // 4秒後に結果画面へ（結果を確認する時間を与える）
+                }, 4000); 
             };
 
 
@@ -904,14 +929,9 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 }
             };
 
+            // Not used in new logic but kept for safety
             const calculateScorePoints = () => {
-                const basePoints = 1000;
-                const duration = (Date.now() - questionStartTime) / 1000;
-                const timePenalty = Math.floor(duration) * 10;
-                const hintPenalty = hintLevel * 300;
-                let p = basePoints - timePenalty - hintPenalty;
-                if (p < 100) p = 100; 
-                return p;
+               return 0;
             };
 
             const checkAnswer = () => {
@@ -1116,21 +1136,35 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
             }
             
             if (mode === 'result') {
+                 const levelInfo = getLevelInfo(score);
                  return (
                     <div className="flex flex-col items-center justify-center h-full text-center py-10 px-4 animate-fadeIn">
-                        <Trophy size={64} className="text-yellow-400 mb-4 drop-shadow-lg" />
-                        <h2 className="text-2xl font-bold text-gray-800 mb-2">結果発表</h2>
-                        <div className="mb-6">
-                            {mode === 'trial' || isTrialChecked ? ( /* isTrialChecked added to detect trial finish context properly */
-                                <div className="flex flex-col items-center">
-                                    <span className="text-gray-500 text-sm">TOTAL SCORE</span>
-                                    <span className="text-5xl font-extrabold text-orange-500">{score}</span>
-                                    <span className="text-gray-400 text-sm mt-1">({correctCount} / {playQuestions.length} 問正解)</span>
+                        {mode === 'trial' || isTrialChecked ? (
+                            <div className="flex flex-col items-center">
+                                <div className="mb-2 relative">
+                                    {levelInfo.icon}
+                                    <div className={`text-xl font-black mt-2 ${levelInfo.color}`}>{levelInfo.title}</div>
+                                    <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Level {levelInfo.level}</div>
                                 </div>
-                            ) : (
+                                
+                                <h2 className="text-3xl font-extrabold text-gray-800 mb-2">
+                                    {score} <span className="text-lg font-normal text-gray-500">pts</span>
+                                </h2>
+                                
+                                <div className="text-sm text-gray-500 mb-6 bg-slate-50 px-4 py-2 rounded-lg">
+                                    正解数: <span className="font-bold text-gray-800">{correctCount}</span> / {playQuestions.length}
+                                    {correctCount === 5 && <span className="ml-2 text-green-600 font-bold text-xs">+Bonus!</span>}
+                                </div>
+                            </div>
+                        ) : (
+                            // Learning Mode Result
+                            <div className="flex flex-col items-center mb-8">
+                                <Trophy size={64} className="text-yellow-400 mb-4 drop-shadow-lg" />
+                                <h2 className="text-2xl font-bold text-gray-800 mb-2">結果発表</h2>
                                 <span className="text-4xl font-bold text-blue-600">{score} / {playQuestions.length} 問正解</span>
-                            )}
-                        </div>
+                            </div>
+                        )}
+
                         {mistakes.length > 0 && (
                             <div className="w-full max-w-sm bg-red-50 border border-red-100 rounded-xl p-4 mb-6 text-left overflow-y-auto max-h-40">
                                 <div className="font-bold text-red-800 mb-2 text-xs flex items-center"><AlertCircle size={14} className="mr-1"/> 要復習リスト</div>
