@@ -1,0 +1,737 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Play, RotateCcw, Volume2, Clock, Settings, BookOpen, AlertCircle, CheckCircle, HelpCircle, X, Trophy, GripVertical, ChevronRight, Flag, Star, Activity, Calendar, Save, Zap } from 'lucide-react';
+
+// --- 音声データ (Base64 placeholder) ---
+const SOUND_CORRECT = "data:audio/mp3;base64,//NExAAAAania..."; 
+const SOUND_WRONG = "data:audio/mp3;base64,//NExAAAAania...";   
+
+// 効果音再生
+const playSound = (type) => {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  
+  const now = ctx.currentTime;
+  if (type === 'correct') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(523.25, now); // C5
+    osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+    gain.gain.setValueAtTime(0.1, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+    osc.start(now);
+    osc.stop(now + 0.4);
+  } else if (type === 'wrong') {
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(150, now);
+    gain.gain.setValueAtTime(0.1, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+    osc.start(now);
+    osc.stop(now + 0.3);
+  } else if (type === 'pop') {
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(400, now);
+    gain.gain.setValueAtTime(0.05, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+    osc.start(now);
+    osc.stop(now + 0.1);
+  }
+};
+
+// --- デフォルトデータ ---
+const DEFAULT_DATA_CSV = `
+I heard my parents talk about my grades.	両親が私の成績について話しているのを聞いた。	知覚動詞	grades: 成績
+We saw a police officer chasing a man.	私たちは警官が男の人を追いかけているのを見た。	知覚動詞	chase: 追いかける
+I saw a boy scolded by his father.	私は少年が父親に叱られているのを見た。	知覚動詞	scold: 叱る (受動態に注意)
+Didn’t you hear the phone ring?	電話が鳴るのが聞こえませんでしたか？	知覚動詞	ring: 鳴る
+I watched my favorite baseball player talk about his team on YouTube.	私は好きな野球選手がYouTubeで自分のチームについて話しているのを見た。	知覚動詞
+I saw a deer surrounded by lions on TV.	私はテレビで、シカがライオンに囲まれているのを見た。	知覚動詞	surround: 囲む / deer: シカ(単複同形)
+My mother made me clean the bathroom.	母は私に（言いつけて）浴室の掃除をさせた。	使役動詞	make O do: Oに(無理やり)～させる
+My mother let me play video games last night.	母は昨夜、私にテレビゲームをさせてくれた。	使役動詞	let O do: Oに～させてあげる(許可)
+My mother had the doctor look at her leg.	母は医者に足を診てもらった。	使役動詞	have O do: Oに～してもらう(依頼)
+My coach let me go home early because I felt sick.	気分が悪かったので、コーチは私を早退させてくれた。	使役動詞	go home early: 早退する
+The teacher made me clean the classroom by myself.	先生は私にひとりで教室の掃除をさせた。	使役動詞	by myself: ひとりで
+At the hotel, I had the staff carry my bag to the room.	ホテルで、私はスタッフに部屋までカバンを運んでもらった。	使役動詞
+My parents let me go to USJ with my friends.	両親は私を友だちとUSJに行かせてくれた。	使役動詞
+The comedian was made to drink Aojiru as a penalty for the game.	その芸人はゲームの罰として青汁を飲まされた。	使役動詞	penalty: 罰 / makeの受動態はtoが必要
+He asked me if I had seen the movie.	彼は私に、その映画を見たかどうか尋ねた。	接続詞	ask + O + if...: Oに～かどうか尋ねる
+My mother asked me when I would come home.	母は私に、いつ帰ってくるのか尋ねた。	接続詞
+My friends asked me if I wanted to play e-sports.	友達は私にeスポーツをやりたいかどうか尋ねた。	接続詞
+Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた。	接続詞
+Some parents ask me if e-sports is a real sport.	何人かの両親は私にeスポーツは本当のスポーツなのかどうか尋ねた。	接続詞
+The e-sports player told us why he needed mental skills.	eスポーツプレーヤ―たちは私たちになぜ精神的スキルが必要なのか伝えた。	接続詞	mental skills: 精神的な技術
+`.trim();
+
+// 動詞リスト
+const VERB_LIST = [
+  "heard", "talk", "saw", "chasing", "scolded", "hear", "ring", "watched", 
+  "surrounded", "made", "clean", "let", "play", "had", "look", "go", "felt", 
+  "carry", "drink", "asked", "seen", "come", "wanted", "doing", "is", "told", "needed"
+];
+
+// 結合対象の単語
+const PREFIX_WORDS = ['a', 'an', 'the', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'this', 'that', 'some', 'any'];
+
+// --- マスコットキャラクター: フクロウ先生 ---
+const MascotOwl = ({ emotion, message }) => {
+  const formattedMessage = message ? message.split('\n').map((str, index) => (
+    <React.Fragment key={index}>
+      {str}
+      {index !== message.split('\n').length - 1 && <br />}
+    </React.Fragment>
+  )) : null;
+
+  return (
+    <div className="relative flex items-center animate-bounce-slight transform scale-90 origin-bottom-left">
+      {/* Owl SVG */}
+      <svg width="70" height="70" viewBox="0 0 100 100" className="drop-shadow-md z-20">
+        <ellipse cx="50" cy="55" rx="35" ry="40" fill="#60A5FA" /> 
+        <ellipse cx="50" cy="65" rx="25" ry="28" fill="#FEF3C7" />
+        <path d="M25 30 L15 10 L40 25 Z" fill="#60A5FA" />
+        <path d="M75 30 L85 10 L60 25 Z" fill="#60A5FA" />
+        <circle cx="35" cy="45" r="12" fill="white" stroke="#2563EB" strokeWidth="2"/>
+        <circle cx="65" cy="45" r="12" fill="white" stroke="#2563EB" strokeWidth="2"/>
+        {emotion === 'happy' ? (
+          <>
+             <path d="M28 45 Q35 40 42 45" stroke="#2563EB" strokeWidth="3" fill="none" />
+             <path d="M58 45 Q65 40 72 45" stroke="#2563EB" strokeWidth="3" fill="none" />
+          </>
+        ) : emotion === 'sad' ? (
+          <>
+             <circle cx="35" cy="48" r="3" fill="#2563EB" />
+             <circle cx="65" cy="48" r="3" fill="#2563EB" />
+             <path d="M45 20 L30 25" stroke="white" strokeWidth="2" />
+          </>
+        ) : (
+          <>
+             <circle cx="35" cy="45" r="4" fill="#2563EB" />
+             <circle cx="65" cy="45" r="4" fill="#2563EB" />
+          </>
+        )}
+        <path d="M45 55 L55 55 L50 65 Z" fill="#F59E0B" />
+        <path d="M15 55 Q10 70 20 80" stroke="#3B82F6" strokeWidth="3" fill="none" />
+        <path d="M85 55 Q90 70 80 80" stroke="#3B82F6" strokeWidth="3" fill="none" />
+      </svg>
+      {/* 吹き出し */}
+      {formattedMessage && (
+        <div className="ml-3 bg-white border-2 border-blue-200 p-2 rounded-xl rounded-bl-none shadow-lg text-xs md:text-sm text-blue-900 font-bold min-w-[140px] max-w-[200px] z-20 animate-fadeIn leading-relaxed self-start mt-2">
+          {formattedMessage}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- 円形タイマー ---
+const CircularTimer = ({ timeLeft, maxTime }) => {
+  const radius = 16;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (timeLeft / maxTime) * circumference;
+  const colorClass = timeLeft < 10 ? "text-red-500" : "text-blue-500";
+
+  return (
+    <div className="relative w-12 h-12 flex items-center justify-center">
+      <svg className="w-full h-full transform -rotate-90">
+        <circle cx="24" cy="24" r={radius} stroke="currentColor" strokeWidth="3" fill="transparent" className="text-gray-200"/>
+        <circle cx="24" cy="24" r={radius} stroke="currentColor" strokeWidth="3" fill="transparent"
+          strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round"
+          className={`${colorClass} transition-all duration-1000 ease-linear`}
+        />
+      </svg>
+      <div className={`absolute text-xs font-bold ${colorClass}`}>{timeLeft}</div>
+    </div>
+  );
+};
+
+// --- 学習履歴表示カード ---
+const StatsCard = ({ stats }) => (
+  <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm w-full max-w-sm animate-fadeIn">
+    <div className="flex items-center justify-between mb-3">
+      <div className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center">
+        <Activity size={14} className="mr-1"/> Learning Stats
+      </div>
+    </div>
+    <div className="flex justify-around text-center divide-x divide-gray-100">
+      <div className="px-2 flex flex-col items-center">
+        <div className="text-2xl font-bold text-green-500">{stats.totalCorrect || 0}</div>
+        <div className="text-[10px] text-gray-500 flex items-center mt-1">
+          <CheckCircle size={10} className="mr-1"/> Total Correct
+        </div>
+      </div>
+      <div className="px-2 flex flex-col items-center">
+        <div className="text-2xl font-bold text-orange-500">{stats.trialHighScore || 0}</div>
+        <div className="text-[10px] text-gray-500 flex items-center mt-1">
+          <Trophy size={10} className="mr-1"/> High Score
+        </div>
+      </div>
+      <div className="px-2 flex flex-col items-center">
+        <div className="text-2xl font-bold text-blue-500">{(stats.learningGames || 0) + (stats.trialGames || 0)}</div>
+        <div className="text-[10px] text-gray-500 flex items-center mt-1">
+          <Play size={10} className="mr-1"/> Games
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const App = () => {
+  // State
+  const [allQuestions, setAllQuestions] = useState([]);
+  const [playQuestions, setPlayQuestions] = useState([]);
+  const [categories, setCategories] = useState([]);
+  
+  const [mode, setMode] = useState('menu');
+  const [currentQIndex, setCurrentQIndex] = useState(0);
+  
+  // Game State
+  const [shuffledWords, setShuffledWords] = useState([]);
+  const [selectedWords, setSelectedWords] = useState([]);
+  const [draggedItem, setDraggedItem] = useState(null);
+  
+  const [score, setScore] = useState(0); // Trial: Points, Learning: Correct Count (Display Only logic)
+  const [correctCount, setCorrectCount] = useState(0); // 正解数カウント用
+  const [questionStartTime, setQuestionStartTime] = useState(0); // 回答開始時刻
+  
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [maxTime, setMaxTime] = useState(60);
+  const [isTimerActive, setIsTimerActive] = useState(false);
+  
+  const [mistakes, setMistakes] = useState([]);
+  const [showJapanese, setShowJapanese] = useState(true);
+  const [feedback, setFeedback] = useState(null);
+  const [hintLevel, setHintLevel] = useState(0); 
+  
+  // Stats
+  const [stats, setStats] = useState({ learningGames: 0, trialGames: 0, totalCorrect: 0, trialHighScore: 0 });
+
+  // Settings
+  const [rawCsvData, setRawCsvData] = useState(DEFAULT_DATA_CSV);
+  
+  // 初期化：ローカルストレージからデータ読み込み
+  useEffect(() => {
+    // Stats
+    const savedStats = localStorage.getItem('grammarAppStats');
+    if (savedStats) {
+      const parsed = JSON.parse(savedStats);
+      // 古いデータの移行処理
+      if (parsed.trialHighScore === undefined) {
+         setStats({
+           learningGames: parsed.learningGames || parsed.gamesPlayed || 0,
+           trialGames: parsed.trialGames || 0,
+           totalCorrect: parsed.totalScore || 0, // 以前のtotalScoreは正解数として扱う
+           trialHighScore: 0
+         });
+      } else {
+         setStats(parsed);
+      }
+    }
+
+    // Settings
+    const savedCsv = localStorage.getItem('grammarAppCsvData');
+    const savedTime = localStorage.getItem('grammarAppTimeLimit');
+
+    if (savedCsv) setRawCsvData(savedCsv);
+    if (savedTime) setMaxTime(Number(savedTime));
+  }, []);
+
+  // CSVが変わったらパース
+  useEffect(() => {
+    const { loaded, cats } = parseCSV(rawCsvData);
+    setAllQuestions(loaded);
+    setCategories(cats);
+  }, [rawCsvData]);
+
+  const saveSettings = () => {
+    localStorage.setItem('grammarAppCsvData', rawCsvData);
+    localStorage.setItem('grammarAppTimeLimit', maxTime);
+    setMode('menu');
+  };
+
+  const updateStats = (finalCorrectCount, finalScore, gameMode) => {
+    const newStats = { ...stats };
+    
+    if (gameMode === 'learning') {
+      newStats.learningGames = (newStats.learningGames || 0) + 1;
+    } else if (gameMode === 'trial') {
+      newStats.trialGames = (newStats.trialGames || 0) + 1;
+      // High Score更新
+      if (finalScore > (newStats.trialHighScore || 0)) {
+        newStats.trialHighScore = finalScore;
+      }
+    }
+    
+    newStats.totalCorrect = (newStats.totalCorrect || 0) + finalCorrectCount;
+    
+    setStats(newStats);
+    localStorage.setItem('grammarAppStats', JSON.stringify(newStats));
+  };
+
+  const parseCSV = (csv) => {
+    const cats = new Set();
+    const loaded = csv.split('\n').map((line, index) => {
+      const parts = line.split('\t');
+      if (parts.length < 2) return null;
+      
+      const original = parts[0].trim();
+      let cleanOriginal = original;
+      let punctuation = "";
+
+      if (original.match(/[.?!]$/)) {
+        punctuation = original.slice(-1);
+        cleanOriginal = original.slice(0, -1);
+      }
+
+      let words = cleanOriginal.split(/\s+/);
+      if (words.length > 0 && words[0] !== "I") {
+        words[0] = words[0].toLowerCase();
+      }
+
+      if (words.length >= 8) {
+        const groupedWords = [];
+        let i = 0;
+        while (i < words.length) {
+          const w = words[i];
+          const cleanW = w.toLowerCase().replace(/[^a-z]/g, '');
+          if (PREFIX_WORDS.includes(cleanW) && i + 1 < words.length) {
+            groupedWords.push(w + " " + words[i+1]);
+            i += 2;
+          } else {
+            groupedWords.push(w);
+            i++;
+          }
+        }
+        words = groupedWords;
+      }
+
+      const category = parts[2] ? parts[2].trim() : "一般";
+      const specificHint = parts[3] ? parts[3].trim() : "";
+      cats.add(category);
+
+      return {
+        id: index,
+        original: original,
+        cleanOriginal: cleanOriginal,
+        punctuation: punctuation,
+        japanese: parts[1] ? parts[1].trim() : "",
+        category: category,
+        specificHint: specificHint,
+        words: words
+      };
+    }).filter(q => q !== null);
+
+    return { loaded, cats: Array.from(cats) };
+  };
+
+  // --- ゲーム開始 ---
+  const startGame = (gameMode, category = null) => {
+    let qList = [];
+    if (gameMode === 'review') {
+      if (mistakes.length === 0) return alert("復習する問題がありません");
+      qList = [...mistakes];
+    } else {
+      let pool = [...allQuestions];
+      if (category && category !== 'ALL') {
+        pool = pool.filter(q => q.category === category);
+      }
+      pool.sort(() => Math.random() - 0.5);
+      qList = pool.slice(0, 5); 
+    }
+
+    if (qList.length === 0) return alert("問題がありません");
+
+    setPlayQuestions(qList);
+    setCurrentQIndex(0);
+    setScore(0);
+    setCorrectCount(0);
+    if (gameMode !== 'review') setMistakes([]);
+    
+    loadQuestion(qList[0]);
+
+    if (gameMode === 'trial') {
+      setTimeLeft(maxTime);
+      setIsTimerActive(true);
+      setMode('trial');
+    } else {
+      setIsTimerActive(false);
+      setMode('learning');
+    }
+  };
+
+  const loadQuestion = (question) => {
+    if (!question) return;
+    setHintLevel(0);
+    setFeedback(null);
+    setSelectedWords([]);
+    setQuestionStartTime(Date.now()); // 時間計測開始
+    
+    const words = question.words.map((w, i) => ({ 
+      text: w, 
+      id: `q${question.id}-w${i}-${Math.random().toString(36).substr(2,5)}` 
+    }));
+    setShuffledWords(words.sort(() => Math.random() - 0.5));
+  };
+
+  // --- タイマー ---
+  useEffect(() => {
+    let timer;
+    if (isTimerActive && timeLeft > 0 && mode === 'trial') {
+      timer = setInterval(() => setTimeLeft(p => p - 1), 1000);
+    } else if (timeLeft === 0 && isTimerActive) {
+      setIsTimerActive(false);
+      finishGame();
+    }
+    return () => clearInterval(timer);
+  }, [isTimerActive, timeLeft, mode]);
+
+  const finishGame = () => {
+    setIsTimerActive(false);
+    setMode('result');
+    if (mode === 'learning' || mode === 'trial') {
+        updateStats(correctCount, score, mode);
+    }
+  };
+
+  // --- Drag & Drop ---
+  const handleDragStart = (e, word, fromBank) => {
+    if (feedback === 'correct' || feedback === 'giveup') return;
+    setDraggedItem({ word, fromBank });
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault(); e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e, targetArea) => {
+    e.preventDefault();
+    if (!draggedItem) return;
+    if (draggedItem.fromBank && targetArea === 'answer') {
+      moveWord(draggedItem.word, true);
+    } else if (!draggedItem.fromBank && targetArea === 'bank') {
+      moveWord(draggedItem.word, false);
+    }
+    setDraggedItem(null);
+  };
+
+  const handleWordClick = (word, fromBank) => {
+    if (feedback === 'correct' || feedback === 'giveup') return;
+    playSound('pop');
+    moveWord(word, fromBank);
+  };
+
+  const moveWord = (word, fromBank) => {
+    if (fromBank) {
+      setShuffledWords(prev => prev.filter(w => w.id !== word.id));
+      setSelectedWords(prev => [...prev, word]);
+    } else {
+      setSelectedWords(prev => prev.filter(w => w.id !== word.id));
+      setShuffledWords(prev => [...prev, word]);
+    }
+  };
+
+  // --- 判定・スコア計算 ---
+  const calculateScorePoints = () => {
+    // 基準点
+    const basePoints = 1000;
+    // 時間減点: 1秒ごとに10点減点 (最低0点まで)
+    const duration = (Date.now() - questionStartTime) / 1000;
+    const timePenalty = Math.floor(duration) * 10;
+    // ヒント減点: Lv1=-300, Lv2=-600 (累積ではなくレベルで判定)
+    const hintPenalty = hintLevel * 300;
+    
+    let p = basePoints - timePenalty - hintPenalty;
+    if (p < 100) p = 100; // 最低点保証(正解すれば必ずもらえる)
+    return p;
+  };
+
+  const checkAnswer = () => {
+    const currentQ = playQuestions[currentQIndex];
+    const userSentence = selectedWords.map(w => w.text).join(' ');
+    const isCorrect = userSentence.replace(/\s+/g, ' ').trim().toLowerCase() === currentQ.cleanOriginal.replace(/\s+/g, ' ').trim().toLowerCase();
+
+    if (isCorrect) {
+      handleCorrect();
+    } else {
+      setFeedback('wrong');
+      playSound('wrong');
+      if (!mistakes.find(m => m.id === currentQ.id)) {
+        setMistakes(prev => [...prev, currentQ]);
+      }
+    }
+  };
+
+  const handleCorrect = () => {
+    const currentQ = playQuestions[currentQIndex];
+    setFeedback('correct');
+    playSound('correct');
+    speakText(currentQ.original);
+    
+    // スコア/正解数加算
+    setCorrectCount(prev => prev + 1);
+    
+    if (mode === 'trial') {
+      const points = calculateScorePoints();
+      setScore(prev => prev + points);
+    } else {
+      setScore(prev => prev + 1); // Learningモードは正解数表示
+    }
+  };
+
+  const handleGiveUp = () => {
+    const currentQ = playQuestions[currentQIndex];
+    setFeedback('giveup');
+    playSound('wrong');
+    speakText(currentQ.original);
+    if (!mistakes.find(m => m.id === currentQ.id)) {
+      setMistakes(prev => [...prev, currentQ]);
+    }
+  };
+
+  const nextQuestion = () => {
+    if (currentQIndex + 1 < playQuestions.length) {
+      setCurrentQIndex(prev => prev + 1);
+      loadQuestion(playQuestions[currentQIndex + 1]);
+    } else {
+      finishGame();
+    }
+  };
+
+  const speakText = (text) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const uttr = new SpeechSynthesisUtterance(text);
+      uttr.lang = 'en-US';
+      window.speechSynthesis.speak(uttr);
+    }
+  };
+
+  // --- マスコット・ヒント ---
+  const getOwlMessage = () => {
+    const currentQ = playQuestions[currentQIndex];
+    if (feedback === 'correct') {
+      if (mode === 'trial') return `Nice!\n+${calculateScorePoints()}pts`; // 正解時は点数を表示(再計算になるが近似値でOK)
+      return "Great Job!\nその調子！";
+    }
+    if (feedback === 'giveup') return "Don't worry.\n切り替えよう！";
+    if (feedback === 'wrong') return "Oops!\n惜しい！";
+    if (hintLevel === 1) return `動詞は\n"${getVerbHint()}" だよ！`;
+    if (hintLevel === 2) return "文法や語句のヒント\nを見てみて！";
+    return "";
+  };
+
+  const getOwlEmotion = () => {
+    if (feedback === 'correct') return 'happy';
+    if (feedback === 'wrong' || feedback === 'giveup') return 'sad';
+    return 'neutral';
+  };
+
+  const isVerb = (text) => {
+    const firstWord = text.split(' ')[0].toLowerCase().replace(/[.,?]/g, '');
+    return VERB_LIST.includes(firstWord);
+  };
+  const getVerbHint = () => {
+    const currentQ = playQuestions[currentQIndex];
+    const verbs = currentQ.words.filter(w => isVerb(w));
+    return verbs.join(", ");
+  };
+  const getGrammarHint = (cat) => {
+    if (cat.includes('知覚')) return "知覚動詞(see/hear) + O + 原型/ing (Oが～するのを見る)";
+    if (cat.includes('使役')) return "使役動詞(make/let) + O + 原型 (Oに～させる)";
+    if (cat.includes('接続詞')) return "接続詞の後は [S + V] の語順になるよ！";
+    return "語順のルールを思い出して！";
+  };
+
+  // --- Render ---
+  const getCardStyle = (word, isSelectedArea) => {
+    let style = "px-3 py-2 m-1 rounded bg-white border-2 border-gray-200 shadow-sm font-medium cursor-grab active:cursor-grabbing select-none transition-transform hover:scale-105 ";
+    if (word.text.includes(' ')) style += "border-b-4 border-blue-100 ";
+    if (hintLevel >= 1 && isVerb(word.text)) style += " !font-bold !text-blue-700 !border-blue-400 !bg-blue-50 ring-2 ring-blue-200 ";
+    return style;
+  };
+
+  const renderMenu = () => (
+    <div className="flex flex-col items-center justify-center h-full space-y-6 py-8 animate-fadeIn w-full">
+      <div className="text-center mb-4">
+        <h1 className="text-3xl font-extrabold text-blue-600 mb-2">文法並べ替えマスター</h1>
+        <div className="flex justify-center mb-2">
+           <MascotOwl emotion="happy" message="" />
+        </div>
+      </div>
+      <StatsCard stats={stats} />
+      <div className="w-full max-w-xs space-y-3">
+        <button onClick={() => setMode('category_select')} 
+          className="w-full flex items-center p-4 bg-white border-2 border-blue-100 rounded-xl shadow-sm hover:border-blue-500 transition-all group">
+          <div className="bg-blue-100 p-2 rounded-full mr-3 text-blue-600 group-hover:bg-blue-600 group-hover:text-white"><BookOpen size={20} /></div>
+          <div className="text-left"><div className="font-bold text-gray-800">学習モード</div><div className="text-xs text-gray-500">解説付きでじっくり</div></div>
+        </button>
+        <button onClick={() => startGame('trial')}
+          className="w-full flex items-center p-4 bg-white border-2 border-orange-100 rounded-xl shadow-sm hover:border-orange-500 transition-all group">
+          <div className="bg-orange-100 p-2 rounded-full mr-3 text-orange-600 group-hover:bg-orange-600 group-hover:text-white"><Clock size={20} /></div>
+          <div className="text-left"><div className="font-bold text-gray-800">タイムトライアル</div><div className="text-xs text-gray-500">スコアアタック</div></div>
+        </button>
+        {mistakes.length > 0 && (
+          <button onClick={() => startGame('review')}
+            className="w-full flex items-center p-4 bg-white border-2 border-red-100 rounded-xl shadow-sm hover:border-red-500 transition-all group">
+            <div className="bg-red-100 p-2 rounded-full mr-3 text-red-600 group-hover:bg-red-600 group-hover:text-white"><RotateCcw size={20} /></div>
+            <div className="text-left"><div className="font-bold text-gray-800">復習モード</div><div className="text-xs text-gray-500">苦手な{mistakes.length}問を克服</div></div>
+          </button>
+        )}
+      </div>
+      <button onClick={() => setMode('settings')} className="text-gray-400 hover:text-gray-600 flex items-center text-xs mt-4"><Settings size={14} className="mr-1" /> 教員用設定</button>
+    </div>
+  );
+
+  const renderGame = () => {
+    const currentQ = playQuestions[currentQIndex];
+    if (!currentQ) return <div>Loading...</div>;
+
+    return (
+      <div className="flex flex-col h-full max-w-4xl mx-auto px-4 py-4 relative">
+        <div className="flex justify-between items-start mb-2">
+          <button onClick={() => setMode('menu')} className="text-gray-400 hover:text-gray-700"><X size={24} /></button>
+          <div className="flex flex-col items-center">
+             <div className="flex space-x-1 mb-1">
+               {playQuestions.map((_, idx) => (
+                 <div key={idx} className={`w-2 h-2 rounded-full ${idx === currentQIndex ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
+               ))}
+             </div>
+             {mode === 'trial' ? (
+                <span className="text-lg font-bold text-orange-500">Score: {score}</span>
+             ) : (
+                <span className="text-xs text-gray-400 font-bold">{currentQ.category}</span>
+             )}
+          </div>
+          {mode === 'trial' ? <CircularTimer timeLeft={timeLeft} maxTime={maxTime} /> : <div className="w-8"></div>}
+        </div>
+
+        <div className="flex-1 flex flex-col justify-center min-h-0">
+          <div className="text-center mb-4">
+             <h2 className="text-xl md:text-2xl font-bold text-gray-800 leading-normal">{currentQ.japanese}</h2>
+          </div>
+          {(hintLevel > 0 && feedback !== 'correct') && (
+            <div className="mb-4 text-center animate-fadeIn z-30 relative flex flex-col items-center gap-2">
+                {hintLevel >= 1 && <div className="inline-block bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-2 rounded-full text-sm font-bold shadow-sm"><span>💡 ヒント1: 動詞は 「<span className="text-blue-600">{getVerbHint()}</span>」 です！</span></div>}
+                {hintLevel >= 2 && <div className="inline-block bg-orange-50 border border-orange-200 text-orange-800 px-4 py-2 rounded-full text-sm font-bold shadow-sm max-w-md"><div className="mb-1">📘 ヒント2: {getGrammarHint(currentQ.category)}</div>{currentQ.specificHint && <div className="border-t border-orange-200 pt-1 mt-1 text-xs text-orange-900 bg-orange-100 p-2 rounded"><span className="font-bold">Memo:</span> {currentQ.specificHint}</div>}</div>}
+            </div>
+          )}
+          <div className="space-y-6">
+            <div 
+              className={`min-h-[80px] rounded-xl p-3 flex flex-wrap items-center justify-center gap-2 border-2 border-dashed transition-colors ${feedback === 'correct' ? 'bg-green-50 border-green-300 border-solid' : 'bg-slate-50 border-slate-300'}`}
+              onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'answer')}
+            >
+              {selectedWords.length === 0 && <div className="text-gray-400 text-sm pointer-events-none flex items-center"><GripVertical size={16} className="mr-1 opacity-50"/> 単語を並べてください</div>}
+              {selectedWords.map((word) => (
+                <div key={word.id} draggable={!feedback} onDragStart={(e) => handleDragStart(e, word, false)} onClick={() => handleWordClick(word, false)} className={getCardStyle(word, true)}>{word.text}</div>
+              ))}
+              {currentQ.punctuation && <div className="text-xl font-bold text-gray-800 self-center pt-1">{currentQ.punctuation}</div>}
+            </div>
+            <div className="flex flex-wrap justify-center gap-2 min-h-[60px]" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'bank')}>
+              {shuffledWords.map((word) => (
+                <div key={word.id} draggable={!feedback} onDragStart={(e) => handleDragStart(e, word, true)} onClick={() => handleWordClick(word, true)} className={getCardStyle(word, false)}>{word.text}</div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-auto pt-4 relative">
+          <div className="absolute left-0 bottom-16 hidden md:block pointer-events-none z-0"><MascotOwl emotion={getOwlEmotion()} message={getOwlMessage()} /></div>
+          {feedback === 'correct' || feedback === 'giveup' ? (
+             <div className="bg-white border-2 border-blue-100 shadow-xl rounded-2xl p-4 animate-slideUp z-10 relative">
+               <div className="flex items-center justify-between mb-2">
+                 <div className={`flex items-center font-bold text-lg ${feedback==='correct' ? 'text-green-700' : 'text-gray-600'}`}>{feedback==='correct' ? <CheckCircle className="mr-2"/> : <Flag className="mr-2"/>}{feedback==='correct' ? 'Correct!' : 'Answer'}</div>
+                 <button onClick={() => speakText(currentQ.original)} className="p-2 bg-gray-100 rounded-full hover:bg-blue-100 hover:text-blue-600"><Volume2 size={20} /></button>
+               </div>
+               <div className="text-lg text-blue-900 font-serif bg-blue-50 p-2 rounded mb-3">{currentQ.original}</div>
+               <div className="text-sm text-gray-600 mb-4 bg-white border border-gray-100 p-2 rounded">
+                 <span className="font-bold text-blue-600 block mb-1">★解説: {currentQ.category}</span> 
+                 {getGrammarHint(currentQ.category)}
+                 {currentQ.specificHint && <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-500"><span className="font-bold">Memo:</span> {currentQ.specificHint}</div>}
+               </div>
+               <button onClick={nextQuestion} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-md">次へ進む</button>
+             </div>
+          ) : (
+             <div className="space-y-3 z-10 relative bg-white/80 md:bg-transparent p-2 rounded-xl backdrop-blur-sm md:backdrop-blur-none">
+                <div className="flex gap-2 animate-fadeIn pl-0 md:pl-56"> 
+                  <button onClick={() => setHintLevel(1)} disabled={hintLevel >= 1} className="flex-1 py-2 bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-lg text-xs font-bold hover:bg-yellow-100 disabled:opacity-50 transition-colors"><HelpCircle size={14} className="inline mr-1"/> ヒント1:動詞</button>
+                  <button onClick={() => setHintLevel(2)} disabled={hintLevel < 1 || hintLevel >= 2} className="flex-1 py-2 bg-orange-50 text-orange-800 border border-orange-200 rounded-lg text-xs font-bold hover:bg-orange-100 disabled:opacity-50 transition-colors"><BookOpen size={14} className="inline mr-1"/> ヒント2:文法+</button>
+                </div>
+                <div className="flex gap-2 pl-0 md:pl-56">
+                  <button onClick={handleGiveUp} className="px-4 py-3 bg-gray-200 text-gray-600 rounded-xl font-bold hover:bg-gray-300 text-sm whitespace-nowrap">Give up</button>
+                  <button onClick={checkAnswer} disabled={selectedWords.length !== currentQ.words.length} className={`flex-1 py-3 rounded-xl font-bold shadow-md transition-all text-lg ${selectedWords.length !== currentQ.words.length ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-[1.02]'}`}>Check</button>
+                </div>
+             </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderResult = () => (
+    <div className="flex flex-col items-center justify-center h-full text-center py-10 px-4 animate-fadeIn">
+      <Trophy size={64} className="text-yellow-400 mb-4 drop-shadow-lg" />
+      <h2 className="text-2xl font-bold text-gray-800 mb-2">結果発表</h2>
+      <div className="mb-6">
+         {mode === 'trial' ? (
+            <div className="flex flex-col items-center">
+               <span className="text-gray-500 text-sm">TOTAL SCORE</span>
+               <span className="text-5xl font-extrabold text-orange-500">{score}</span>
+               <span className="text-gray-400 text-sm mt-1">({correctCount} / {playQuestions.length} 問正解)</span>
+            </div>
+         ) : (
+            <span className="text-4xl font-bold text-blue-600">{score} / {playQuestions.length} 問正解</span>
+         )}
+      </div>
+      {mistakes.length > 0 && (
+        <div className="w-full max-w-sm bg-red-50 border border-red-100 rounded-xl p-4 mb-6 text-left overflow-y-auto max-h-40">
+          <div className="font-bold text-red-800 mb-2 text-xs flex items-center"><AlertCircle size={14} className="mr-1"/> 要復習リスト</div>
+          <ul className="space-y-2">{mistakes.map((m, i) => (<li key={i} className="text-xs text-gray-700 bg-white p-2 rounded border border-red-100">{m.original}</li>))}</ul>
+        </div>
+      )}
+      <div className="flex space-x-3">
+        <button onClick={() => setMode('menu')} className="px-6 py-3 bg-white border border-gray-300 text-gray-600 rounded-xl font-bold hover:bg-gray-50">メニュー</button>
+        <button onClick={() => startGame(mode === 'trial' ? 'trial' : 'learning', 'ALL')} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg">もう一度</button>
+      </div>
+    </div>
+  );
+
+  const renderCategorySelect = () => (
+      <div className="flex flex-col h-full py-4 px-4">
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={() => setMode('menu')} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
+          <h2 className="text-lg font-bold text-gray-800">カテゴリ選択</h2><div className="w-8"></div>
+        </div>
+        <div className="flex-1 overflow-y-auto grid grid-cols-2 gap-3 pb-4 max-w-2xl mx-auto w-full">
+          <button onClick={() => startGame('learning', 'ALL')} className="p-3 rounded-lg border-2 border-blue-100 bg-blue-50 text-blue-800 font-bold hover:bg-blue-100 text-sm text-center col-span-2">すべて (ランダム)</button>
+          {categories.map(cat => (<button key={cat} onClick={() => startGame('learning', cat)} className="p-3 rounded-lg border-2 border-gray-100 hover:border-blue-400 hover:bg-white transition-all font-medium text-gray-700 text-sm text-center shadow-sm">{cat}</button>))}
+        </div>
+      </div>
+  );
+
+  const renderSettings = () => (
+    <div className="p-4 max-w-xl mx-auto h-full flex flex-col">
+      <div className="flex items-center justify-between mb-4"><h2 className="text-lg font-bold flex items-center text-gray-800"><Settings className="mr-2"/> 設定</h2><button onClick={() => setMode('menu')} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button></div>
+      <div className="mb-4 flex-1 flex flex-col">
+        <label className="block text-xs font-bold mb-1 text-gray-700">問題データ (CSV)</label>
+        <div className="text-xs text-gray-500 mb-2 bg-blue-50 p-2 rounded leading-tight">英文[TAB]日本語[TAB]カテゴリ[TAB]解説(省略可)<br/>※4列目に語句の解説などを入れるとヒント2で表示されます。</div>
+        <textarea value={rawCsvData} onChange={(e) => setRawCsvData(e.target.value)} className="flex-1 p-2 border border-gray-300 rounded-lg font-mono text-xs focus:ring-2 focus:ring-blue-500 outline-none resize-none"/>
+      </div>
+      <div className="mb-4"><label className="block text-xs font-bold mb-1 text-gray-700">制限時間(秒)</label><input type="number" value={maxTime} onChange={(e) => setMaxTime(Number(e.target.value))} className="p-2 border border-gray-300 rounded-lg w-24 text-center"/></div>
+      <button onClick={saveSettings} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 flex items-center justify-center"><Save size={18} className="mr-2"/> 保存して戻る</button>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-100 text-gray-800 font-sans md:p-6 p-2 flex items-center justify-center">
+      <div className="w-full max-w-3xl bg-white md:h-[650px] h-[90vh] shadow-2xl rounded-3xl overflow-hidden relative border border-gray-100 flex flex-col">
+        {mode === 'menu' && renderMenu()}
+        {mode === 'category_select' && renderCategorySelect()}
+        {(mode === 'learning' || mode === 'trial' || mode === 'review') && renderGame()}
+        {mode === 'result' && renderResult()}
+        {mode === 'settings' && renderSettings()}
+      </div>
+    </div>
+  );
+};
+
+export default App;
