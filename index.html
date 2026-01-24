@@ -58,12 +58,17 @@
     <!-- ★Polyfillの初期化スクリプト -->
     <script>
         // オプション設定
-        var options = {
-            // ドラッグ中の画像のY軸オフセット調整（指で隠れないように少し上にずらすなど）
-            dragImageTranslateOverride: MobileDragDrop.scrollBehaviour.dragImageTranslateOverride
-        };
+        var options = {};
+        
+        // エラー回避: ライブラリが正しく読み込まれているか確認してから設定
+        if (window.MobileDragDrop && MobileDragDrop.scrollBehaviour) {
+            options.dragImageTranslateOverride = MobileDragDrop.scrollBehaviour.dragImageTranslateOverride;
+        }
+
         // ポリフィルの適用
-        MobileDragDrop.polyfill(options);
+        if (window.MobileDragDrop) {
+            MobileDragDrop.polyfill(options);
+        }
 
         // タッチ操作でのスクロール干渉を防ぐ（必要な場合）
         window.addEventListener('touchmove', function() {}, {passive: false});
