@@ -447,6 +447,7 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                 }
             };
 
+            // --- Drag & Drop Updates ---
             const handleDragStart = (e, word, fromBank) => {
                 if (feedback === 'correct' || feedback === 'giveup') return;
                 setDraggedItem({ word, fromBank });
@@ -460,11 +461,60 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
             const handleDrop = (e, targetArea) => {
                 e.preventDefault();
                 if (!draggedItem) return;
-                if (draggedItem.fromBank && targetArea === 'answer') {
-                    moveWord(draggedItem.word, true);
-                } else if (!draggedItem.fromBank && targetArea === 'bank') {
+                
+                // 回答エリアへのドロップ（空白部分へのドロップ扱い）
+                if (targetArea === 'answer') {
+                    if (draggedItem.fromBank) {
+                        moveWord(draggedItem.word, true); // バンクから末尾に追加
+                    } else {
+                        // 回答エリア内での移動（末尾への移動）
+                        const newSelected = [...selectedWords];
+                        const draggedIndex = newSelected.findIndex(w => w.id === draggedItem.word.id);
+                        if (draggedIndex !== -1) {
+                            const [removed] = newSelected.splice(draggedIndex, 1);
+                            newSelected.push(removed);
+                            setSelectedWords(newSelected);
+                        }
+                    }
+                } 
+                // バンクへのドロップ（戻す）
+                else if (targetArea === 'bank' && !draggedItem.fromBank) {
                     moveWord(draggedItem.word, false);
                 }
+                setDraggedItem(null);
+            };
+
+            // カード同士の並べ替え・挿入ロジック
+            const handleCardDrop = (e, targetWord) => {
+                e.preventDefault();
+                e.stopPropagation(); // エリアのonDrop発火を防ぐ
+                
+                if (!draggedItem) return;
+                const draggedWord = draggedItem.word;
+                
+                // 1. 回答エリア内での並べ替え
+                if (!draggedItem.fromBank && selectedWords.some(w => w.id === targetWord.id)) {
+                    const newSelected = [...selectedWords];
+                    const draggedIndex = newSelected.findIndex(w => w.id === draggedWord.id);
+                    const targetIndex = newSelected.findIndex(w => w.id === targetWord.id);
+                    
+                    if (draggedIndex !== -1 && targetIndex !== -1) {
+                        const [removed] = newSelected.splice(draggedIndex, 1);
+                        newSelected.splice(targetIndex, 0, removed);
+                        setSelectedWords(newSelected);
+                    }
+                }
+                // 2. バンクから回答エリアの特定位置への挿入
+                else if (draggedItem.fromBank && selectedWords.some(w => w.id === targetWord.id)) {
+                    // バンクから削除
+                    setShuffledWords(prev => prev.filter(w => w.id !== draggedWord.id));
+                    // 回答エリアのターゲット位置に挿入
+                    const newSelected = [...selectedWords];
+                    const targetIndex = newSelected.findIndex(w => w.id === targetWord.id);
+                    newSelected.splice(targetIndex, 0, draggedWord);
+                    setSelectedWords(newSelected);
+                }
+                
                 setDraggedItem(null);
             };
 
@@ -729,7 +779,16 @@ The e-sports player told us why he needed mental skills.	eスポーツプレー�
                             >
                                 {selectedWords.length === 0 && <div className="text-gray-400 text-sm pointer-events-none flex items-center"><GripVertical size={16} className="mr-1 opacity-50"/> 単語を並べてください</div>}
                                 {selectedWords.map((word) => (
-                                    <div key={word.id} draggable={!feedback} onDragStart={(e) => handleDragStart(e, word, false)} onClick={() => handleWordClick(word, false)} className={getCardStyle(word, true)}>{word.text}</div>
+                                    <div 
+                                        key={word.id} 
+                                        draggable={!feedback} 
+                                        onDragStart={(e) => handleDragStart(e, word, false)} 
+                                        onDrop={(e) => handleCardDrop(e, word)}
+                                        onClick={() => handleWordClick(word, false)} 
+                                        className={getCardStyle(word, true)}
+                                    >
+                                        {word.text}
+                                    </div>
                                 ))}
                                 {currentQ.punctuation && <div className="text-xl font-bold text-gray-800 self-center pt-1">{currentQ.punctuation}</div>}
                             </div>
