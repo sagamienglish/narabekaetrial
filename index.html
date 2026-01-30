@@ -162,13 +162,13 @@
 I saw a boy scolded by his father.	私は少年が父親に叱られているのを見た。	知覚動詞	scold: 叱る (受動態に注意)
 Didn’t you hear the phone ring?	電話が鳴るのが聞こえませんでしたか？	知覚動詞	ring: 鳴る
 [I watched my favorite baseball player talk] about his team on YouTube.	私は好きな野球選手がYouTubeで自分のチームについて話しているのを見た。	知覚動詞	
-Last Sunday, [I saw a deer surrounded by lions] on TV.	この前の日曜日、私はテレビでシカがライオンに囲まれているのを見た。	知覚動詞	[ ]内が並べ替え対象。surround: 囲む
-My mother made me clean the bathroom.	母は私に（言いつけて）浴室の掃除をさせた。	使役動詞	make O do: Oに(無理やり)～させる
+Last Sunday, [I saw a deer surrounded by lions] on TV.	この前の日曜日、私はテレビでシカがライオンに囲まれているのを見た。	知覚動詞	surround: 囲む
+My mother made me clean the bathroom.	母は私に浴室の掃除をさせた。	使役動詞	make O do: Oに(無理やり)～させる
 [My mother let me play video games] last night.	母は昨夜、私にテレビゲームをさせてくれた。	使役動詞	let O do: Oに～させてあげる(許可)
 My mother had the doctor look at her leg.	母は医者に足を診てもらった。	使役動詞	have O do: Oに～してもらう(依頼)
 [My coach let me go home early] because I felt sick.	気分が悪かったので、コーチは私を早退させてくれた。	使役動詞	go home early: 早退する
 The teacher made me clean the classroom by myself.	先生は私にひとりで教室の掃除をさせた。	使役動詞	by myself: ひとりで
-At the hotel, [I had the staff carry my bag] to the room.	ホテルで、私はスタッフに部屋までカバンを運んでもらった。	使役動詞	[ ]内が並べ替え対象
+At the hotel, [I had the staff carry my bag] to the room.	ホテルで、私はスタッフに部屋までカバンを運んでもらった。	使役動詞	
 [My parents let me go to USJ] with my friends.	両親は私を友だちとUSJに行かせてくれた。	使役動詞	
 [The comedian was made to drink Aojiru] as a penalty for the game.	その芸人はゲームの罰として青汁を飲まされた。	使役動詞	penalty: 罰 / makeの受動態はtoが必要
 He asked me if I had seen the movie.	彼は私に、その映画を見たかどうか尋ねた。	接続詞	ask + O + if...: Oに～かどうか尋ねる
@@ -177,13 +177,24 @@ My friends [asked me if I wanted to play] e-sports.	友達は私にeスポーツ
 Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた。	接続詞	
 [Some parents ask me if e-sports is] a real sport.	何人かの両親は私にeスポーツは本当のスポーツなのかどうか尋ねた。	接続詞	
 [The e-sports player told us why he needed] mental skills.	eスポーツプレーヤ―たちは私たちになぜ精神的スキルが必要なのか伝えた。	接続詞	mental skills: 精神的な技術
+He plays basketball [ as if he was ] a professional player.	彼はプロ選手であるかのようにプレーします。	仮定法	
+The politician talks to us [ as if she knew ] everything.	その政治家は全てを知っているかのように私たちに話します。	仮定法	
+The actor speaks English fluently [ as if he was ] a native speaker.	その俳優はネイティブスピーカーかのように流暢に英語を話します。	仮定法	fluently: 流暢に
+I [ wish the weather was ] nice.	天気が良かったらなぁ。	仮定法	
+I [ wish I could run fast].	速く走れたらなぁ。	仮定法	
+If I [ lived in Hawaii, I would go ] surfing throughout the year.	もし早いに済んでいたら、一年中サーフィンに行くのに。	仮定法	
+It takes two hours to get to school.  I [ wish the campus were closer ] to my house.	毎日２時間学校に行くのにかかる。キャンパスが家にもっと近かったらなぁ。	仮定法	
+If I [ were rich, I would buy ] a house in Hawaii.	もし私が金持ちだったら、ハワイに家を買うだろうに。	仮定法	
+If I [ had more money, I could ] buy a new smartphone.	もっとお金を持っていたら、新しいスマホを買えるのに。	仮定法	
+What [ would you do if you were ] the president of the US?	あなたがアメリカ合衆国の大統領なら何をしますか。	仮定法	
 `.trim();
 
-        // 動詞リスト
+        // 動詞リスト (knew, was 追加)
         const VERB_LIST = [
             "heard", "talk", "saw", "chasing", "scolded", "hear", "ring", "watched", 
             "surrounded", "made", "clean", "let", "play", "had", "look", "go", "felt", 
-            "carry", "drink", "asked", "seen", "come", "wanted", "doing", "is", "told", "needed"
+            "carry", "drink", "asked", "seen", "come", "wanted", "doing", "is", "told", "needed",
+            "plays", "knows", "speaks", "wish", "could", "lived", "would", "takes", "were", "buy", "had", "knew", "was"
         ];
 
         // 結合対象の単語
@@ -260,7 +271,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
             );
         };
 
-        // --- Level Calculation System (Moved outside App) ---
+        // --- Level Calculation System ---
         const getLevelInfo = (score) => {
             if (score >= 200) return { level: 10, title: "Grammar God", icon: <Crown size={48} className="text-yellow-500" />, color: "text-yellow-500" };
             if (score >= 180) return { level: 9, title: "Legend", icon: <Trophy size={48} className="text-purple-500" />, color: "text-purple-500" };
@@ -274,7 +285,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
             return { level: 1, title: "Novice", icon: <Sprout size={48} className="text-slate-400" />, color: "text-slate-400" };
         };
 
-        // --- 学習履歴表示カード (Updated with Level) ---
+        // --- 学習履歴表示カード ---
         const StatsCard = ({ stats }) => {
             const levelInfo = getLevelInfo(stats.trialHighScore || 0);
 
@@ -329,11 +340,11 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
             const [selectedWords, setSelectedWords] = useState([]);
             
             // Game State (Trial Mode) - 5問一括管理用
-            const [trialState, setTrialState] = useState([]); // [{id:qId, selected:[], bank:[], status:'playing'|'correct'|'wrong'}]
-            const [isTrialChecked, setIsTrialChecked] = useState(false); // タイムトライアル一括チェック済みか
+            const [trialState, setTrialState] = useState([]); 
+            const [isTrialChecked, setIsTrialChecked] = useState(false); 
 
             const [draggedItem, setDraggedItem] = useState(null);
-            const [selectedCardId, setSelectedCardId] = useState(null); // クリック選択用ID
+            const [selectedCardId, setSelectedCardId] = useState(null); 
             
             const [score, setScore] = useState(0); 
             const [correctCount, setCorrectCount] = useState(0); 
@@ -393,6 +404,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
             const clearStats = () => {
                 if (confirm("学習履歴をすべてクリアしますか？")) {
                     localStorage.removeItem('grammarAppStats');
+                    localStorage.removeItem('L10_grammar_highscore'); 
                     setStats({ learningGames: 0, trialGames: 0, totalCorrect: 0, trialHighScore: 0 });
                 }
             };
@@ -404,8 +416,18 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                     newStats.learningGames = (newStats.learningGames || 0) + 1;
                 } else if (gameMode === 'trial') {
                     newStats.trialGames = (newStats.trialGames || 0) + 1;
+                    
                     if (finalScore > (newStats.trialHighScore || 0)) {
                         newStats.trialHighScore = finalScore;
+                        
+                        const levelInfo = getLevelInfo(finalScore);
+                        const exportData = {
+                            score: finalScore,
+                            level: levelInfo.level,
+                            title: levelInfo.title,
+                            date: new Date().toISOString()
+                        };
+                        localStorage.setItem('L10_grammar_highscore', JSON.stringify(exportData));
                     }
                 }
                 
@@ -427,34 +449,29 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                     let preText = "";
                     let postText = "";
 
-                    // ★新ルール: [ ]の中身だけを並べ替え対象(coreText)とする
                     let coreText = original;
                     const match = original.match(/^(.*?)\[(.*?)\](.*?)$/);
                     
                     if (match) {
-                        // [ ] が見つかった場合
                         preText = match[1].trim();
                         coreText = match[2].trim();
                         postText = match[3].trim();
                     } else {
-                        // [ ] がない場合は全体を並べ替え対象
                         coreText = original;
                     }
 
-                    // 文末記号の分離処理 (coreTextの末尾にある場合)
                     if (coreText.match(/[.?!]$/)) {
                         punctuation = coreText.slice(-1);
                         coreText = coreText.slice(0, -1);
                     }
 
-                    cleanOriginal = coreText; // 並べ替え対象の正解テキスト
+                    cleanOriginal = coreText; 
 
                     let words = cleanOriginal.split(/\s+/);
                     if (words.length > 0 && words[0] !== "I") {
                         words[0] = words[0].toLowerCase();
                     }
 
-                    // 単語結合ロジック (8語以上の場合)
                     if (words.length >= 8) {
                         const groupedWords = [];
                         let i = 0;
@@ -493,15 +510,12 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 return { loaded, cats: Array.from(cats) };
             };
 
-            // カテゴリ選択画面への遷移
             const goToCategorySelect = (targetMode) => {
                 setNextGameMode(targetMode);
-                // 初期状態は何も選択されていない状態
                 setSelectedCategorySet(new Set()); 
                 setMode('category_select');
             };
 
-            // カテゴリトグル
             const toggleCategory = (cat) => {
                 const newSet = new Set(selectedCategorySet);
                 if (newSet.has(cat)) {
@@ -520,7 +534,6 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 }
             };
 
-            // ゲーム開始 (引数は categoryList または 'ALL' だったが、今は selectedCategorySet を使う)
             const startGame = (gameMode, specificQList = null) => {
                 let qList = [];
                 
@@ -528,21 +541,15 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                     if (mistakes.length === 0) return alert("復習する問題がありません");
                     qList = [...mistakes];
                 } else if (specificQList) {
-                    // 特定リストがある場合（使わないかもだが維持）
                     qList = specificQList;
                 } else {
-                    // 通常開始: 選択されたカテゴリでフィルタリング
-                    // もしカテゴリが一つも選ばれてなければアラート
                     if (selectedCategorySet.size === 0) {
                         return alert("カテゴリを1つ以上選択してください。");
                     }
-
                     let pool = allQuestions.filter(q => selectedCategorySet.has(q.category));
-                    
                     if (pool.length === 0) {
                         return alert("選択されたカテゴリの問題がありません。");
                     }
-
                     pool.sort(() => Math.random() - 0.5);
                     qList = pool.slice(0, 5); 
                 }
@@ -561,7 +568,6 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 setMode(gameMode);
 
                 if (gameMode === 'trial') {
-                    // Trial Mode: Initialize 5 questions state
                     const initialTrialState = qList.map(q => {
                         const words = q.words.map((w, i) => ({ 
                             text: w, 
@@ -572,16 +578,15 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                             question: q,
                             selected: [],
                             bank: words,
-                            status: 'playing' // playing, correct, wrong
+                            status: 'playing' 
                         };
                     });
                     setTrialState(initialTrialState);
                     setIsTrialChecked(false);
                     setTimeLeft(maxTime);
                     setIsTimerActive(true);
-                    setQuestionStartTime(Date.now()); // Overall start time
+                    setQuestionStartTime(Date.now()); 
                 } else {
-                    // Learning Mode: Init first question
                     loadQuestion(qList[0]);
                     setIsTimerActive(false);
                 }
@@ -599,7 +604,6 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                     text: w, 
                     id: `q${question.id}-w${i}-${Math.random().toString(36).substr(2,5)}` 
                 }));
-                // バンク（shuffledWords）は初期シャッフルのみ行い、移動によって削除しない
                 setShuffledWords(words.sort(() => Math.random() - 0.5));
             };
 
@@ -609,7 +613,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                     timer = setInterval(() => setTimeLeft(p => p - 1), 1000);
                 } else if (timeLeft === 0 && isTimerActive) {
                     setIsTimerActive(false);
-                    checkTrialAnswers(); // Time up -> Auto check
+                    checkTrialAnswers(); 
                 }
                 return () => clearInterval(timer);
             }, [isTimerActive, timeLeft, mode]);
@@ -622,7 +626,6 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 }
             };
 
-            // --- Drag & Drop (Unified) ---
             const handleDragStart = (e, word, fromBank, qIndex = -1) => {
                 if (mode === 'learning' && (feedback === 'correct' || feedback === 'giveup')) return;
                 if (mode === 'trial' && isTrialChecked) return;
@@ -646,17 +649,14 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 e.preventDefault();
                 if (!draggedItem) return;
                 
-                // Cross-question drop prevention in Trial mode
                 if (mode === 'trial' && draggedItem.qIndex !== qIndex) return;
 
                 if (mode === 'trial') {
                     handleTrialMoveWord(qIndex, draggedItem.word, draggedItem.fromBank, targetArea === 'answer');
                 } else {
-                    // Learning Mode Logic
                     if (targetArea === 'answer') {
                         if (draggedItem.fromBank) moveWord(draggedItem.word, true);
                         else {
-                            // Move within answer (to end)
                             const newSelected = [...selectedWords];
                             const idx = newSelected.findIndex(w => w.id === draggedItem.word.id);
                             if (idx !== -1) {
@@ -677,18 +677,14 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 e.stopPropagation(); 
                 if (!draggedItem) return;
                 
-                // Cross-question check
                 if (mode === 'trial' && draggedItem.qIndex !== qIndex) return;
 
                 const draggedWord = draggedItem.word;
 
                 if (mode === 'trial') {
-                    // Trial Mode Card Swap/Insert logic within specific question state
                     handleTrialCardSwap(qIndex, draggedWord, targetWord, draggedItem.fromBank);
                 } else {
-                    // Learning Mode logic
                     if (!draggedItem.fromBank && selectedWords.some(w => w.id === targetWord.id)) {
-                        // Reorder in answer
                         const newSelected = [...selectedWords];
                         const dIdx = newSelected.findIndex(w => w.id === draggedWord.id);
                         const tIdx = newSelected.findIndex(w => w.id === targetWord.id);
@@ -698,7 +694,6 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                             setSelectedWords(newSelected);
                         }
                     } else if (draggedItem.fromBank && selectedWords.some(w => w.id === targetWord.id)) {
-                        // Insert from bank
                         if (selectedWords.some(w => w.id === draggedWord.id)) return;
                         const newSelected = [...selectedWords];
                         const tIdx = newSelected.findIndex(w => w.id === targetWord.id);
@@ -709,29 +704,24 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 setDraggedItem(null);
             };
 
-            // --- Trial Mode Logic Handlers ---
             const handleTrialMoveWord = (qIndex, word, fromBank, toAnswer) => {
                 setTrialState(prev => {
                     const newState = [...prev];
                     const targetQ = newState[qIndex];
                     
                     if (toAnswer) {
-                        // Move to Answer
                         if (!fromBank) {
-                             // Already in answer, move to end (simple move)
                              const idx = targetQ.selected.findIndex(w => w.id === word.id);
                              if (idx !== -1) {
                                  const [removed] = targetQ.selected.splice(idx, 1);
                                  targetQ.selected.push(removed);
                              }
                         } else {
-                             // From bank to answer
                              if (!targetQ.selected.some(w => w.id === word.id)) {
                                  targetQ.selected.push(word);
                              }
                         }
                     } else {
-                        // Move to Bank (Remove from Answer)
                         targetQ.selected = targetQ.selected.filter(w => w.id !== word.id);
                     }
                     return newState;
@@ -744,7 +734,6 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                     const targetQ = newState[qIndex];
                     
                     if (!fromBank) {
-                        // Reorder in answer
                         const dIdx = targetQ.selected.findIndex(w => w.id === draggedWord.id);
                         const tIdx = targetQ.selected.findIndex(w => w.id === targetWord.id);
                         if (dIdx !== -1 && tIdx !== -1) {
@@ -752,13 +741,12 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                             targetQ.selected.splice(tIdx, 0, removed);
                         }
                     } else {
-                        // Insert from bank
                         if (!targetQ.selected.some(w => w.id === draggedWord.id)) {
                             const tIdx = targetQ.selected.findIndex(w => w.id === targetWord.id);
                             if (tIdx !== -1) {
                                 targetQ.selected.splice(tIdx, 0, draggedWord);
                             } else {
-                                targetQ.selected.push(draggedWord); // Fallback
+                                targetQ.selected.push(draggedWord); 
                             }
                         }
                     }
@@ -789,26 +777,21 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                     const isUsed = currentQState.selected.some(w => w.id === word.id);
                     
                     if (isUsed) {
-                        // 使用済みカードをクリック: 選択中なら戻す
                         if (selectedCardId === word.id) {
                             handleTrialMoveWord(qIndex, word, false, false);
                             setSelectedCardId(null);
                         }
                     } else {
-                        // 未使用: 移動
                         handleTrialMoveWord(qIndex, word, true, true);
                         setSelectedCardId(null);
                     }
                 } else {
-                    // 回答エリア
                     if (selectedCardId === null) {
                         setSelectedCardId(word.id);
                     } else if (selectedCardId === word.id) {
-                        // 再クリックで戻す
                         handleTrialMoveWord(qIndex, word, false, false);
                         setSelectedCardId(null);
                     } else {
-                        // スワップ判定
                         const currentQState = trialState[qIndex];
                         const sourceWordInCurrent = currentQState.selected.find(w => w.id === selectedCardId);
                         
@@ -816,7 +799,6 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                             handleTrialSwapInPlace(qIndex, selectedCardId, word.id);
                             setSelectedCardId(null);
                         } else {
-                            // 異なる問題のカードを選択していた場合 -> 切り替え
                             setSelectedCardId(word.id);
                         }
                     }
@@ -847,7 +829,6 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 setTrialState(updatedState);
                 setCorrectCount(trialCorrectCount);
                 if (newMistakes.length > 0) {
-                    // Merge unique mistakes
                     setMistakes(prev => {
                         const ids = new Set(prev.map(m => m.id));
                         const added = newMistakes.filter(m => !ids.has(m.id));
@@ -855,15 +836,9 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                     });
                 }
 
-                // Score Calculation Update
-                // 1問20点 * 正解数
                 let totalScore = trialCorrectCount * 20;
                 
-                // 全問正解ボーナス: 残り秒数 * 5点
                 if (trialCorrectCount === 5) {
-                    // Time upしてない場合のみボーナス計算（checkTrialAnswersがTime upで呼ばれた場合はtimeLeft=0なので自然と0）
-                    // ただし手動で押した場合は timeLeft を使う
-                    // ここでは state の timeLeft を使う
                     totalScore += timeLeft * 5;
                 }
                 
@@ -873,12 +848,11 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 else playSound('wrong');
                 
                 setTimeout(() => {
-                    finishGame(totalScore, trialCorrectCount); // Pass calculated values directly
+                    finishGame(totalScore, trialCorrectCount); 
                 }, 4000); 
             };
 
 
-            // --- Learning Mode Logic Handlers ---
             const handleWordClick = (word, fromBank) => {
                 if (feedback === 'correct' || feedback === 'giveup') return;
                 
@@ -929,7 +903,6 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 }
             };
 
-            // Not used in new logic but kept for safety
             const calculateScorePoints = () => {
                return 0;
             };
@@ -992,7 +965,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
             const getOwlMessage = () => {
                 const currentQ = playQuestions[currentQIndex];
                 if (feedback === 'correct') {
-                    if (mode === 'trial') return ""; // Trial logic handled elsewhere
+                    if (mode === 'trial') return ""; 
                     return "Great Job!\nその調子！";
                 }
                 if (feedback === 'giveup') return "Don't worry.\n切り替えよう！";
@@ -1009,8 +982,8 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
             };
 
             const isVerb = (text) => {
-                const firstWord = text.split(' ')[0].toLowerCase().replace(/[.,?]/g, '');
-                return VERB_LIST.includes(firstWord);
+                const words = text.toLowerCase().replace(/[.,?]/g, '').split(/\s+/);
+                return words.some(w => VERB_LIST.includes(w));
             };
             const getVerbHint = () => {
                 const currentQ = playQuestions[currentQIndex];
@@ -1021,6 +994,7 @@ Jane asked me what I was doing.	Janeは私に何をしているのか尋ねた�
                 if (cat.includes('知覚')) return "知覚動詞(see/hear) + O + 原型/ing (Oが～するのを見る)";
                 if (cat.includes('使役')) return "使役動詞(make/let) + O + 原型 (Oに～させる)";
                 if (cat.includes('接続詞')) return "接続詞の後は [S + V] の語順になるよ！";
+                if (cat.includes('仮定法')) return "I wish S Vp(過去) / as if S Vp / If S Vp, S would V";
                 return "語順のルールを思い出して！";
             };
 
